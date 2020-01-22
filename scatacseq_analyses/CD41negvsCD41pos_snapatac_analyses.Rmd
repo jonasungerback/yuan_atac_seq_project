@@ -398,7 +398,7 @@ peak.var <- apply(peak.dataframe,1,var)
 peak.var <- as.data.frame(peak.var)
 peak.var  <- peak.var[order(peak.var$peak.var, decreasing = T),]
 peak.var <- as.data.frame(peak.var)
-peak.var$counter <- 1:146861
+peak.var$counter <- 1:133491
 
 plot(peak.var$counter,peak.var$peak.var, type="l", col="black", lwd=2, xlab="Peak", ylab="Variance")
 abline(v=c(10000,20000), col=c("blue", "red"), lty=c(1,2), lwd=c(1, 3))
@@ -411,20 +411,20 @@ library(scater)
 sce <- runPCA(sce, ncomponents = 50, ntop = 10000)
 sce <- runUMAP(sce,  ntop = 10000)
 sce <- runDiffusionMap(sce, ntop = 10000)
-save.image("/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/FLvsCD41neg_analysis/FL_HSCvsCD41neg_snapatac_analyses.RData")
+save.image("/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/CD41negvsCD41pos/CD41negvsCD41pos_snapatac_analyses.RData")
 
 
 #Should I rerun this with 10000 peaks to match the 9000 in the NFE2 Gata1 peak list? The answer was yes.
 
 #Test to perform a UMAP reduction on the PCA from sce-
-sce2 <- sce
-sce2 <- SingleCellExperiment(assays = list(counts = t(as.matrix(sce@reducedDims$PCA)), logcounts = t(as.matrix(sce@reducedDims$PCA))))
-sce2<- runUMAP(sce2 )
-sce2$cell_type <- x.sp3.sample_peaks@sample
-sce2$snap_cluster <- x.sp3.sample_peaks@cluster
-plotReducedDim(sce2, use_dimred = "UMAP", colour_by = "cell_type")
+#sce2 <- SingleCellExperiment(assays = list(counts = t(as.matrix(sce@reducedDims$PCA)), logcounts = t(as.matrix(sce@reducedDims$PCA))))
+#sce2<- runUMAP(sce2 )
+#sce2$cell_type <- x.sp3.sample_peaks@sample
+#sce2$snap_cluster <- x.sp3.sample_peaks@cluster
+#plotReducedDim(sce2, use_dimred = "UMAP", colour_by = "cell_type")
 
-########## LOOKS LIKE A PEAK CLUSTERING AND TRAJECTORY ANALYSIS HERE WILL BE EXTREMELY DIFFICULT SO WILL MOVE ON WITH DAR AND MOTIF CALLING AND MAYBE REVISIT THIS LATER.
+plotReducedDim(sce, use_dimred = "UMAP", colour_by = "cell_type")
+########## I will for trajectory analysis use the umap based without PCA reduction fitst since this looks better.
 
 
 #Plot the UMAP colored by cell type-
@@ -433,35 +433,35 @@ plotReducedDim(sce, use_dimred = "PCA", colour_by = "cell_type")
 #Apply slingshot
 library(slingshot)
 #Both DiffusionMaps and PCA performs poorly.
-sce <- slingshot(sce, reducedDim = "UMAP", clusterLabels = c(rep("FL_HSC",2358), rep("CD41neg",2314), rep("CD41pos",1166), rep("MkP",2985)))
-sce2 <- slingshot(sce2, reducedDim = "UMAP", clusterLabels = c(rep("FL_HSC",2358), rep("CD41neg",2314), rep("CD41pos",1166), rep("MkP",2985)))
+sce <- slingshot(sce, reducedDim = "UMAP", clusterLabels = c(rep(1,305), rep(2,552), rep(3,608), rep(4,365), rep(5,398), rep(6,238), rep(7,340), rep(8,232), rep(9,442)))
+#sce2 <- slingshot(sce2, reducedDim = "UMAP", clusterLabels = c(rep("FL_HSC",2358), rep("CD41neg",2314), rep("CD41pos",1166), rep("MkP",2985)))
 library(ggplot2)
 library(ggbeeswarm)
 library(ggthemes)
 
 #Plot pseudotime vs cell-type and cluster.
-ggplot(as.data.frame(colData(sce2)), aes(x = sce2$slingPseudotime_1, y = cell_type, 
+ggplot(as.data.frame(colData(sce)), aes(x = sce$slingPseudotime_1, y = cell_type, 
                               colour = cell_type)) +
     geom_quasirandom(groupOnX = FALSE) +
     theme_classic() +
-    xlab("Slingshot pseudotime") + ylab("Timepoint") +
-    ggtitle("Cells ordered by Slingshot pseudotime var_top10000_peaks")
+    xlab("Slingshot pseudotime 1") + ylab("Timepoint") +
+    ggtitle("Cells ordered by Slingshot_1 pseudotime var_top10000_peaks")
 
-ggsave(filename = "slingshot_pseudotime_order_cell_type_var_top10000_peaks.pdf", device = "pdf",path = "/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/Snap_Figures/", units = c("cm"), width = 20, height = 15)
+ggsave(filename = "slingshot_pseudotime_order_1_cell_type_var_top10000_peaks.pdf", device = "pdf",path = "/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/CD41negvsCD41pos/", units = c("cm"), width = 20, height = 15)
 
-ggplot(as.data.frame(colData(sce2)), aes(x = sce2$slingPseudotime_1, y = snap_cluster, 
+ggplot(as.data.frame(colData(sce)), aes(x = sce$slingPseudotime_2, y = snap_cluster, 
                               colour = snap_cluster)) +
     geom_quasirandom(groupOnX = FALSE) +
     theme_classic() +
-    xlab("Slingshot pseudotime") + ylab("Timepoint") +
-    ggtitle("Cells ordered by Slingshot pseudotime var_top10000_peaks")
+    xlab("Slingshot pseudotime 2") + ylab("Timepoint") +
+    ggtitle("Cells ordered by Slingshot pseudotime 2 var_top10000_peaks")
 
-ggsave(filename = "slingshot_pseudotime_order_snap_cluster_var_top10000_peaks.pdf", device = "pdf",path = "/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/Snap_Figures/", units = c("cm"), width = 20, height = 15)
+ggsave(filename = "slingshot_pseudotime_order_2_snap_cluster_var_top10000_peaks.pdf", device = "pdf",path = "/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/CD41negvsCD41pos/", units = c("cm"), width = 20, height = 15)
 
 colors <- colorRampPalette(rev(brewer.pal(11,'Spectral')[-6]))(100)
-plotcol <- colors[cut(sce2$slingPseudotime_1, breaks=100)]
-plot(reducedDims(sce2)$UMAP, col = plotcol, pch=16, asp = 1)
-lines(SlingshotDataSet(sce2), lwd=2, col='black')
+plotcol <- colors[cut(sce$slingPseudotime_1, breaks=100)]
+plot(reducedDims(sce)$UMAP, col = plotcol, pch=16, asp = 1)
+lines(SlingshotDataSet(sce), lwd=2, col='black')
 
 #I may want to revisit the pseudotime analysis with a more refined peak list later.
 
@@ -473,11 +473,11 @@ lines(SlingshotDataSet(sce2), lwd=2, col='black')
 table(x.sp3.sample_peaks@cluster)
 
 sample.in.cluster <- cbind( as.data.frame( table(x.sp3.sample_peaks@cluster[which(x.sp3.sample_peaks@sample=="FL_HSC")])), as.data.frame( table(x.sp3.sample_peaks@cluster[which(x.sp3.sample_peaks@sample=="CD41neg")])), as.data.frame( table(x.sp3.sample_peaks@cluster[which(x.sp3.sample_peaks@sample=="CD41pos")])) , as.data.frame(( table(x.sp3.sample_peaks@cluster[which(x.sp3.sample_peaks@sample=="MkP")]))))
-sample.in.cluster <- sample.in.cluster[,c(2,4)]
+sample.in.cluster <- sample.in.cluster[,c(4,6)]
 
 #colnames(sample.in.cluster) <- c("FL_HSC","CD41neg", "CD41pos", "MkP")
-colnames(sample.in.cluster) <- c("FL_HSC","CD41neg")
-rownames(sample.in.cluster) <- c("cluster1","cluster2","cluster3","cluster4","cluster5","cluster6","cluster7","cluster8","cluster9","cluster10")
+colnames(sample.in.cluster) <- c("CD41neg","CD41pos")
+rownames(sample.in.cluster) <- c("cluster1","cluster2","cluster3","cluster4","cluster5","cluster6","cluster7","cluster8","cluster9")
 sample.in.cluster$cluster <- rownames(sample.in.cluster)
 
 
@@ -490,10 +490,10 @@ sample.in.cluster$cluster <- factor(sample.in.cluster$cluster, levels = c("clust
 ggplot(sample.in.cluster, aes(variable,value)) + geom_bar(position="fill", stat="identity", aes(fill = cluster)) + theme_bw()
 
 
-ggsave(filename = "FLvsCD41neg_snap_atac_clusters_per_sample.pdf", device = "pdf",path = "/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/FLvsCD41neg_analysis/", units = c("cm"), width = 20, height = 15)
+ggsave(filename = "CD41negvsCD41pos_snap_atac_clusters_per_sample.pdf", device = "pdf",path = "/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/CD41negvsCD41pos/", units = c("cm"), width = 20, height = 15)
 
 ggplot(sample.in.cluster, aes(cluster,value)) + geom_bar(position="fill", stat="identity", aes(fill = variable)) + theme_bw() +  theme(axis.text.x=element_text(angle=45,hjust=1))
-ggsave(filename = "FLvsCD41neg_snap_atac_samples_per_cluster.pdf", device = "pdf",path = "/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/FLvsCD41neg_analysis/", units = c("cm"), width = 20, height = 15)
+ggsave(filename = "CD41negvsCD41pos_snap_atac_samples_per_cluster.pdf", device = "pdf",path = "/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/FLvsCD41neg_analysis/", units = c("cm"), width = 20, height = 15)
 
 ```
 
@@ -526,7 +526,7 @@ idy.ls = lapply(levels(x.sp3.sample_peaks@cluster), function(cluster_i){
 
 names(idy.ls) = levels(x.sp3.sample_peaks@cluster);
 
-par(mfrow = c(4, 3));
+par(mfrow = c(3, 3));
 
 for(cluster_i in levels(x.sp3.sample_peaks@cluster)){
 	print(cluster_i)
@@ -554,7 +554,7 @@ for(cluster_i in levels(x.sp3.sample_peaks@cluster)){
 for(cluster_i in levels(x.sp3.sample_peaks@cluster)){
 	print(cluster_i)
   
-  peak_name <- paste(cluster_i,"FLvsCD41_DARs.bed", sep = "_")
+  peak_name <- paste(cluster_i,"CD41negvsCD41pos_DARs.bed", sep = "_")
   
 	write.table(x =  as.data.frame( x.sp3.sample_peaks@peak[idy.ls[[cluster_i]],])[,1:3], file = peak_name, sep = "\t", quote = F, row.names = F, col.names = F)
 
@@ -604,7 +604,7 @@ rm(x.sp3.sample_peaks_human)
 #Get the names of the motifs
 colnames(x.sp3.sample_peaks_mmat_combined@mmat)
 
-plot_order_clusters <- factor( c(rep(c(1), times=308) ,rep( c(2), times=451 ), rep( c(3), times=443 ),rep( c(4), times=801 ),rep( c(5), times=253 ),rep( c(6), times=449 ),rep( c(7), times=527 ),rep(c(8), times=341),rep(c(9), times=555),rep(c(10), times=544)), levels = c(1:10)  ) 
+plot_order_clusters <- factor( c(rep(c(1), times=305) ,rep( c(2), times=552 ), rep( c(3), times=608 ),rep( c(4), times=365 ),rep( c(5), times=398 ),rep( c(6), times=238 ),rep( c(7), times=340 ),rep(c(8), times=232),rep(c(9), times=442)), levels = c(1:9)  ) 
 
 
 #Loop over all the motifs in the file.
@@ -626,11 +626,11 @@ for (i in 1:length(colnames(x.sp3.sample_peaks_mmat_combined@mmat)) ) {
 		  legend.position = "none"
    );
 
-  ggsave(filename = paste(motif_i,"FLvsCD41neg_chromVAR_enrichment_per_cluster.pdf",sep = "."), device = "pdf", dpi = 150, units = c("cm"), width = 10, height = 9)
+  ggsave(filename = paste(motif_i,"CD41negvsCD41pos_chromVAR_enrichment_per_cluster.pdf",sep = "."), device = "pdf", dpi = 150, units = c("cm"), width = 10, height = 9)
 }
 
 #Plot a heatmap of the motifs over pseudotime_
-pseudo.df <- cbind(as.data.frame(sce2$slingClusters), as.data.frame(sce2$slingPseudotime_1))
+pseudo.df <- cbind(as.data.frame(sce$slingClusters), as.data.frame(sce$slingPseudotime_1))
 colnames(pseudo.df)<-c("sample", "pseudotime")
 
 pseudotime_order <- pseudo.df[order(pseudo.df$pseudotime),]
@@ -639,7 +639,7 @@ pseudotime_order$cluster <- x.sp3.sample_peaks_mmat_combined@cluster[pseudotime_
 pseudotime_order$sample <- x.sp3.sample_peaks_mmat_combined@sample[pseudotime_order$index]
 #Bring out the motif_matrix
 motif_matrix <-as.data.frame(t(x.sp3.sample_peaks_mmat_combined@mmat))
-colnames(motif_matrix) <- 1:8823
+colnames(motif_matrix) <- 1:3480
 
 #Plot it with pheatmap.
 library(pheatmap)
@@ -647,40 +647,40 @@ library(pheatmap)
 pheatmap(motif_matrix[,c(pseudotime_order$index)], cluster_cols = F ,annotation_col = pseudotime_order[,c(1:2,4)], show_rownames=F, show_colnames = F)
 
 #The motif matrix is a little big so take out the top 10% most varying motifs and ploit them
-motif_matrix$variance = apply(motif_matrix[,1:8823],1,var)
+motif_matrix$variance = apply(motif_matrix[,1:3480],1,var)
 
 motif_matrix <- motif_matrix[order(motif_matrix$variance, decreasing = T),]
 motif_matrix$counter <- 1:514
-motif_matrix_top100 <- subset(motif_matrix, motif_matrix$counter <= 100)
-motif_matrix_top100 <- motif_matrix_top100[,1:8823]
+motif_matrix_top20 <- subset(motif_matrix, motif_matrix$counter <= 20)
+motif_matrix_top20 <- motif_matrix_top20[,1:3480]
 
 
 #Plot top motifs as a heatmap along the pseudotime trajectory.
 ann_colors = list(sample=c("FL_HSC"="red","CD41neg"="blue","CD41pos"="green","MkP"="goldenrod1"))
 
-pheatmap(motif_matrix_top100[,c(pseudotime_order$index)], cluster_cols = F ,annotation_col = pseudotime_order[,c(1:2,4)], show_rownames=T, show_colnames = F,clustering_distance_rows = "correlation", clustering_method = "ward.D2", annotation_colors = ann_colors, scale = "column")
+pheatmap(motif_matrix_top20[,c(pseudotime_order$index)], cluster_cols = F ,annotation_col = pseudotime_order[,c(1:2,4)], show_rownames=T, show_colnames = F,clustering_distance_rows = "correlation", clustering_method = "ward.D2", annotation_colors = ann_colors, scale = "column")
 
 
 #Plot some motifs over the umap
 colnames(x.sp3.sample_peaks_mmat_combined@mmat)[211]<-"MA0140.2_GATA1_TAL1"
 
- plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0841.1_NFE2'], method="umap",  main='MA0841.1_NFE2', point.size=0.1,  point.shape=19 , quantiles=c(0, 0.9) )
+ plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0841.1_NFE2'], method="umap",  main='MA0841.1_NFE2', point.size=0.4,  point.shape=19 , quantiles=c(0.2, 0.8) )
 
- plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0035.3_Gata1'], method="umap",  main='MA0035.3_Gata1', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8) )
+ plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0035.3_Gata1'], method="umap",  main='MA0035.3_Gata1', point.size=0.4,  point.shape=19 , quantiles=c(0.2, 0.8) )
  
- plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0795.1_SMAD3'], method="umap",  main='MA0795.1_SMAD3', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8) )
+ plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0795.1_SMAD3'], method="umap",  main='MA0795.1_SMAD3', point.size=0.4,  point.shape=19 , quantiles=c(0.2, 0.8) )
  
- plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0080.4_SPI1'], method="umap",  main='MA0080.4_SPI1', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8) )
+ plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0080.4_SPI1'], method="umap",  main='MA0080.4_SPI1', point.size=0.4,  point.shape=19 , quantiles=c(0.2, 0.8) )
 
- plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0140.2_GATA1_TAL1'], method="umap",  main='MA0140.2_GATA1_TAL1', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8) )
+ plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0140.2_GATA1_TAL1'], method="umap",  main='MA0140.2_GATA1_TAL1', point.size=0.4,  point.shape=19 , quantiles=c(0.2, 0.8) )
  
- plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0002.2_RUNX1'], method="umap",  main='MA0002.2_RUNX1', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8))
+ plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0002.2_RUNX1'], method="umap",  main='MA0002.2_RUNX1', point.size=0.4,  point.shape=19 , quantiles=c(0.2, 0.8))
  
-  plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0594.1_Hoxa9'], method="umap",  main='MA0594.1_Hoxa9', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8))
+  plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0594.1_Hoxa9'], method="umap",  main='MA0594.1_Hoxa9', point.size=0.4,  point.shape=19 , quantiles=c(0.2, 0.8))
   
-   plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0102.3_CEBPA'], method="umap",  main='MA0102.3_CEBPA', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8))
+   plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0102.3_CEBPA'], method="umap",  main='MA0102.3_CEBPA', point.size=0.4,  point.shape=19 , quantiles=c(0.2, 0.8))
    
-    plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0139.1_CTCF'], method="umap",  main='MA0139.1_CTCF', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8))
+    plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0139.1_CTCF'], method="umap",  main='MA0139.1_CTCF', point.size=0.4,  point.shape=19 , quantiles=c(0.2, 0.8))
 ```
 
 
