@@ -1,0 +1,4 @@
+#Example command for running the peak calling with the ENCODE ATAC-seq peak calling pipeline (https://github.com/kundajelab/atac_dnase_pipelines)
+
+
+bds atac.bds -species mm10 -enable_idr -no_xcor -pe -nth 24 -macs2_pval_thresh 0.05 -macs2_pval_thresh_bw 0.05 -overlap_pval_thresh 0.05 -out_dir outdir_name -filt_bam1 rep1_mapq10.bam -filt_bam2 rep2_mapq10.bam

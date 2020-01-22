@@ -1,0 +1,172 @@
+#!/bin/bash
+
+# 180214 STAR and RSEM mapping for Trine. Paired-end
+
+#Set dependencies
+
+sample_path="/mnt/data/common/jonas/rnaseq"
+sub_path="$sample_path/trine/"
+
+threads=24
+refdir_size_mm10="/mnt/data/bioinfo_tools_and_refs/refs/index/STAR/mm10.gencode.GRCm38.p5.vM15_gtf/chrNameLength.txt"
+star_refdir_mm10="/mnt/data/bioinfo_tools_and_refs/refs/index/STAR/mm10.gencode.GRCm38.p5.vM15_gtf"
+rsem_refdir_mm10="/mnt/data/bioinfo_tools_and_refs/refs/index/rsem/mm10.GRCm38.p5.v15_gtf/mm10.GRCm38.p5.v15_gtf"
+ref_gen="mm10"
+genome_size=2652783500 #mm10 genome size non-N bases
+
+samples="3_ABM_HSC 4_ABM_LMPP 5_Lin28b_HSC 6_Lin28b_LMPP 7_Ctrl_HSC 8_Ctrl_LMPP"
+
+for i in ${samples}; do
+
+	directory=${sub_path}${i}
+
+	echo "${directory}"
+		
+	#Check if directory exists
+	[ -d ${directory} ] && echo "${directory} exists."
+	[ -d ${directory} ] || echo "${directory} DOES NOT exist."
+	[ -d ${directory} ] || exit
+
+
+	cd ${directory}
+	mkdir -p ${i}.${ref_gen}.rsem
+	#Unzip and cat the files.
+	gunzip -c *R1*.gz > ${i}.${ref_gen}.rsem/${i}.R1.fastq
+	gunzip -c *R2*.gz > ${i}.${ref_gen}.rsem/${i}.R2.fastq
+	#mv *.fastq ${i}.${ref_gen}.rsem
+	
+	cd ${i}.${ref_gen}.rsem
+
+	#Run fastqc on untrimmed files.
+	fastqc ${i}.R1.fastq
+	fastqc ${i}.R2.fastq
+	
+	#Trim fastq files.
+        echo "trim_galore --paired --fastqc --length 40 --clip_R1 15 --clip_R2 15  --three_prime_clip_R1 3 --three_prime_clip_R2 3 ${i}.R1.fastq ${i}.R2.fastq"
+	trim_galore --paired --fastqc --length 40 --clip_R1 15 --clip_R2 15  --three_prime_clip_R1 3 --three_prime_clip_R2 3 ${i}.R1.fastq ${i}.R2.fastq
+
+	#STAR map trimmed fastq-file against custom mm10.
+	echo "STAR --genomeDir ${star_refdir_mm10} --readFilesIn ${i}.R1_val_1.fq ${i}.R2_val_2.fq --runThreadN ${threads}  --quantMode TranscriptomeSAM --outFilterType BySJout --outFilterMultimapNmax 20 --alignSJoverhangMin 8 --alignSJDBoverhangMin 1 --sjdbScore 1 --outFilterMismatchNmax 999 --outFilterMismatchNoverLmax 0.04 --alignIntronMin 20 --alignIntronMax 1000000 --alignMatesGapMax 1000000 --outSAMstrandField intronMotif --outWigStrand Unstranded --outFileNamePrefix ${i}.${ref_gen}. --outReadsUnmapped Fastx"
+
+	STAR --genomeDir ${star_refdir_mm10} --readFilesIn  ${i}.R1_val_1.fq ${i}.R2_val_2.fq --runThreadN ${threads}  --quantMode TranscriptomeSAM --outFilterType BySJout --outFilterMultimapNmax 20 --alignSJoverhangMin 8 --alignSJDBoverhangMin 1 --sjdbScore 1 --outFilterMismatchNmax 999 --outFilterMismatchNoverLmax 0.04 --alignIntronMin 20 --alignIntronMax 1000000 --alignMatesGapMax 1000000 --outSAMstrandField intronMotif --outWigStrand Unstranded --outFileNamePrefix ${i}.${ref_gen}. --outReadsUnmapped Fastx
+
+
+	mkdir -p ${i}.for_genome_browser
+	mkdir -p ${i}.rsem_processed_files
+        ########################################################################################
+
+        #### Bigwig generation from the sorted STAR output sam-file
+        echo "Bigwig generation from the STAR outputted sam-file"
+
+        #Convert sam to bam
+        samtools view -bS -o ${i}.STAR.bam ${i}.${ref_gen}.Aligned.out.sam
+        # convert bam to bed
+        echo "Creating and sorting a bed-file from ${i}.STAR.bam."
+        # convert bam to bed
+        bamToBed -i ${i}.STAR.bam  -split > ${i}.STAR.bed
+        # sort bed-file
+        bedSort ${i}.STAR.bed ${i}.STAR.${ref_gen}.bed
+        # get normaliztion factor for bigwig file
+        scalevar_STAR=$( cat ${i}.STAR.${ref_gen}.bed | wc -l )
+        scalevar_STAR=$( echo "scale=4; 1000000/$scalevar_STAR" | bc )
+        echo "**Inverse of Number of Reads (in Millions)**  $scalevar_STAR"
+        # compile reads
+        echo "Generating ${i}.STAR.${ref_gen}.bg"
+        genomeCoverageBed -bg -i ${i}.STAR.${ref_gen}.bed -g ${refdir_size_mm10} -scale $scalevar_STAR -split > ${i}.STAR.${ref_gen}.bg
+        #convert bedgraph to bigwig file
+        echo "Generating ${i}.STAR.${ref_gen}.bw"
+        bedGraphToBigWig ${i}.STAR.${ref_gen}.bg ${refdir_size_mm10} ${i}.STAR.${ref_gen}.bw
+        mv ${i}.STAR.${ref_gen}.bw ${i}.for_genome_browser
+
+
+        #Cleaning up intermediate files
+        rm *.bg *.bed
+
+        ###########################################################################################
+
+
+   	 #### prepare for RSEM: sort transcriptome BAM to ensure the order of the reads, to make RSEM output (not pme) deterministic. This is for single-end read data and the pipe is taken from the ENCODE script.
+
+        echo "sorting ${i}.$ref_gen}.Aligned.toTranscriptome.out.bam to ensure the order of the reads, to make RSEM output (not pme) deterministic."
+        #mv ${i}.${ref_gen}.Aligned.toTranscriptome.out.bam Tr.bam
+        mv ${i}.${ref_gen}.Aligned.toTranscriptome.out.bam Tr.bam
+
+	#This may not work with the new sort.
+	echo "cat <( samtools view -H Tr.bam ) <( samtools view -@ 10 Tr.bam | sort -T ./ ) | samtools view -@ 10 -bS - > ${i}.${ref_gen}.Aligned.toTranscriptome.out.bam"
+	cat <( samtools view -H Tr.bam ) <( samtools view -@ 10 Tr.bam  | awk '{printf "%s", $0 " "; getline; print}' | sort -T ./ | tr ' ' '\n' ) | samtools view -@ 10 -bS - > ${i}.${ref_gen}.Aligned.toTranscriptome.out.bam
+
+
+    #RSEM, rsem-calculate-expression on the Aligned.toTranscriptome.out.bam generated by STAR and ouputs output-genome-bam for Homer tagdir generations.
+
+
+        echo "rsem-calculate expression on ${i}.${ref_gen}.Aligned.toTranscriptome.out.bam!"
+
+        echo "rsem-calculate-expression -p ${threads} --paired-end --alignments --forward-prob 0 --output-genome-bam --sampling-for-bam --estimate-rspd --seed 12345 --calc-ci --append-names ${i}.${ref_gen}.Aligned.toTranscriptome.out.bam ${rsem_refdir_mm10} ${i}.Aligned.toTranscriptome.rsem.out"
+
+
+ 	 rsem-calculate-expression -p ${threads} --paired-end --alignments --forward-prob 0 --output-genome-bam --sampling-for-bam --estimate-rspd --seed 12345 --calc-ci --append-names ${i}.${ref_gen}.Aligned.toTranscriptome.out.bam ${rsem_refdir_mm10} ${i}.Aligned.toTranscriptome.rsem.out
+
+        echo "rsem-plot-model ${i}.Aligned.toTranscriptome.rsem.out ${i}.Aligned.toTranscriptome.out.pdf"
+   	rsem-plot-model ${i}.Aligned.toTranscriptome.rsem.out ${i}.Aligned.toTranscriptome.out.pdf
+
+
+        # create TagDirectory and keeping all the reads from the genome generated bam file
+        echo ""
+        echo "Creating a Homer tag directory keeping all reads from ${i}.Aligned.toTranscriptome.out.genome.bam!"
+
+        suffix="_STAR_RSEM_${ref_gen}_tagdir"
+        echo "makeTagDirectory ${i}${suffix} ${i}.Aligned.toTranscriptome.rsem.out.genome.bam -keepAll"
+
+        makeTagDirectory ${i}${suffix} ${i}.Aligned.toTranscriptome.rsem.out.genome.bam -keepAll
+
+
+	
+    #### Bigwig generation from the rsem AlignedToTranscriptome.bam
+        echo "Bigwig generation from the rsem AlignedToTranscriptome.bam."
+
+        # convert bam to bed
+
+        echo "Creating and sorting a bed-file from ${i}.Aligned.toTranscriptome.out.genome.bam."
+        # convert bam to bed
+        bamToBed -i ${i}.Aligned.toTranscriptome.rsem.out.genome.bam -split > ${i}.bed
+        # sort bed-file
+        bedSort ${i}.bed ${i}.${ref_gen}.s.bed
+        # get normaliztion factor for bigwig file
+        scalevar=$( cat ${i}.${ref_gen}.s.bed | wc -l )
+        scalevar=$( echo "scale=4; 1000000/$scalevar" | bc )
+        echo "**Inverse of Number of Reads (in Millions)**  $scalevar"
+
+        # compile reads
+        echo "Generating ${i}.${ref_gen}.bg"
+        genomeCoverageBed -bg -i ${i}.${ref_gen}.s.bed -g ${refdir_size_mm10} -scale $scalevar -split > ${i}.${ref_gen}.bg
+        #convert bedgraph to bigwig file
+        echo "Generating ${i}.${ref_gen}.bw"
+        bedGraphToBigWig ${i}.${ref_gen}.bg ${refdir_size_mm10} ${i}.for_genome_browser/${i}.STAR.rsem.${ref_gen}.bw
+
+	
+	## Cleaning up and moving files
+        echo "Starting to clean up!"
+	rm *.bed *.bg
+
+	mv *.results ${j}.rsem_processed_files/
+	mv ${i}.Aligned.toTranscriptome.rsem.out.genome.bam *Aligned.toTranscriptome.out.stat ${i}.rsem_processed_files/
+	mv ${i}.Aligned.toTranscriptome.out.pdf ${i}.rsem_processed_files/
+        mv *.bai *.out *.mate1 *.tab ${i}.rsem_processed_files/
+	rm *.fastq *.sam *.bam *.fq
+
+
+	#Check bigwig sze
+
+	#cd ${i}.for_genome_browser
+
+	#bigwig_file_size=$(cat ${i}.STAR.rsem.${ref_gen}.bw  | wc -c)
+        #echo "The size of the bigwig is: ${bigwig_file_size}."
+        #minimum_size=1000000
+        #if [ ! -f ${i}.STAR.rsem.${ref_gen}.bw ] || [ "${bigwig_file_size}" -le "${minimum_size}" ]; then
+         #   echo "${i}.STAR.rsem.${ref_gen}.bw  is to small. Something is wrong with the script and the rest of your samples will not be processed." && exit
+        #else
+         #   echo "${i}.STAR.rsem.${ref_gen}.bw seems ok. The script will continue."
+        #fi
+
+
+done

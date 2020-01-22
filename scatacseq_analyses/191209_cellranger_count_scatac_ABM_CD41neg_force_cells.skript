@@ -1,0 +1,30 @@
+#! /bin/bash
+#SBATCH -A lsens2018-3-3 # the ID of our Aurora project
+#SBATCH -n 24 # how many processor cores to use
+#SBATCH -N 1 # how many processors to use (always use 1 here unless you know what you are doing)
+#SBATCH -t 48:00:00 # kill the job after ths hh::mm::ss time
+#SBATCH -J 'cellranger_atac_count' # name of the job
+#SBATCH -o 'cellranger_atac_count%j.out' # stdout log file
+#SBATCH -e 'cellranger_atac_count%j.err' # stderr log file
+#SBATCH -p dell # which partition to use
+
+# 191209 Run cellranger count on scATAC-seq data.
+
+#Set dependencies
+
+cell_ranger_ref="/projects/fs5/jonun/scatacseq/10Xindices/refdata-cellranger-atac-mm10-1.2.0"
+fastq_path="/projects/fs5/jonun/scatacseq/191204_A00681_0057_BHHTF7DRXX_jy_HSC/cellranger_out/outs/fastq_path/HHTF7DRXX"
+
+sample_name="ABM_CD41neg"
+sample_out="ABM_CD41neg_2000_cells"
+cell_number=2000
+
+# Load the modules
+module purge
+module load cellranger-atac/1.2.0
+
+cellranger-atac count --id=${sample_out} --reference=${cell_ranger_ref} --fastqs=${fastq_path}/${sample_name} --sample=${sample_name} --force-cells=${cell_number}
+
+module purge
+
+

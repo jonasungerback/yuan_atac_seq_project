@@ -1,0 +1,112 @@
+#/bin/bash
+# 190308 Preprocessing of JU and TS and 230238 ATAC data. Requires bowtie2 with built index, samtools, deeptools, fastqc, trim_galore, picard and homer in your path.
+
+set -ueo #Exit immediately if a simple command exits with a non-zero status#
+
+sample_path="/mnt/data/common/jonas/atacseq"
+sub_path="$sample_path/"
+bowtie2_mm10_idx="/mnt/data/bioinfo_tools_and_refs/refs/index/bowtie2/mm10.GRCm38.p5_gencode"
+ref_gen="mm10"
+threads=48
+genome_size=2652783500 #mm10 genome size non-N bases
+
+samples="OMNI_ATAC_9_230_238_rep1 OMNI_ATAC_10_230_238_rep2"
+
+for i in ${samples}; do
+
+	directory=${sub_path}${i}
+
+	echo "${directory}"
+		
+	#Check if directory exists
+	[ -d ${directory} ] && echo "${directory} exists."
+	[ -d ${directory} ] || echo "${directory} DOES NOT exist."
+	[ -d ${directory} ] || exit
+
+
+	cd ${directory}
+	mkdir -p ${i}.${ref_gen}.bowtie2
+	#Unzip and cat the files.
+	gunzip -dk *.gz  
+	mv *.fastq ${i}.${ref_gen}.bowtie2
+	
+	cd ${i}.${ref_gen}.bowtie2
+
+	cat *R1* > ${i}.R1.fastq
+	cat *R2* > ${i}.R2.fastq
+
+	#Run fastqc on untrimmed files.
+	fastqc ${i}.R1.fastq
+	fastqc ${i}.R2.fastq
+
+	#Trim fastq files.
+        echo "trim_galore --paired --gzip --fastqc --clip_R1 5 --clip_R2 5 --three_prime_clip_R1 3 --three_prime_clip_R2 3 ${i}.R1.fastq ${i}.R2.fastq"
+	trim_galore --paired --gzip --fastqc --clip_R1 5 --clip_R2 5 --three_prime_clip_R1 3 --three_prime_clip_R2 3 ${i}.R1.fastq ${i}.R2.fastq
+
+	#Remove untrimmed fastq files
+	chmod 755 *.fastq
+	rm *.fastq
+
+	#Bowtie2 map trimmed fastq-file against mm10.
+	echo "bowtie2 -x ${bowtie2_mm10_idx} -p ${threads} -X 1000 --dovetail --no-mixed -1 ${i}.R1_val_1.fq.gz -2 ${i}.R2_val_2.fq.gz | samtools view -@ ${threads} -bS - > ${i}.bam 2>>  ${i}.bowtie2_stats.log"
+
+	bowtie2 -x ${bowtie2_mm10_idx} -p ${threads} -X 1000 --dovetail --no-mixed -1 ${i}.R1_val_1.fq.gz -2 ${i}.R2_val_2.fq.gz | samtools view -@ ${threads} -bS - > ${i}.bam 2>>  ${i}.bowtie2_stats.log
+
+	#Sort and index the bam-file
+	echo "samtools sort -@ ${threads} -o ${i}.s.bam ${i}.bam"
+	samtools sort -@ ${threads} -o ${i}.s.bam ${i}.bam
+	echo "samtools index -@ ${threads} ${i}.s.bam"
+	samtools index -@ ${threads} ${i}.s.bam
+	#Print indexing stats
+	echo "Print indexing stats!"
+	samtools idxstats ${i}.s.bam > ${i}.s.bam.idxstats.txt
+
+	#Remove chrM and additional "junk" chromosomes
+	echo "Removing chrM and additional junk chromosomes!"
+	echo "samtools view -@ ${threads} -b ${i}.s.bam chr1 chr2 chr3 chr4 chr5 chr6 chr7 chr8 chr9 chr10 chr11 chr12 chr13 chr14 chr15 chr16 chr17 chr18 chr19 chrX chrY > ${i}.s.no_MT.bam"
+
+	samtools view -@ ${threads} -b ${i}.s.bam chr1 chr2 chr3 chr4 chr5 chr6 chr7 chr8 chr9 chr10 chr11 chr12 chr13 chr14 chr15 chr16 chr17 chr18 chr19 chrX chrY > ${i}.s.no_MT.bam
+
+	#Index the new bam file
+	echo "samtools index -@ ${threads} ${i}.s.no_MT.bam"
+	samtools index -@ ${threads} ${i}.s.no_MT.bam
+
+	#Remove duplicate reads with Picard
+	echo "Removing duplicate reads with Picard"
+	echo "picard MarkDuplicates I=${i}.s.no_MT.bam O=${i}.no_MT.mrkdup.bam M=${i}.no_MT.mrkdup_metrics.txt REMOVE_DUPLICATES=true"
+	picard MarkDuplicates I=${i}.s.no_MT.bam O=${i}.no_MT.mrkdup.bam M=${i}.no_MT.mrkdup_metrics.txt REMOVE_DUPLICATES=true
+
+	#Filter the output for a q-value of 10
+	samtools view -@ ${threads} -b -q 10 ${i}.no_MT.mrkdup.bam > ${i}.q10.bam
+
+	#Sort and sort the file
+	samtools sort -@ ${threads} -o ${i}.q10.s.bam ${i}.q10.bam
+
+	samtools index -@ ${threads} ${i}.q10.s.bam
+	
+	#Write the new idxstats to file
+	samtools idxstats ${i}.q10.s.bam > ${i}.q10.idxstats.txt
+
+	mkdir -p ${i}.for_genome_browser ${i}.pre_processed_files	
+
+	#Create bigwig with deeptools
+	echo "Creating bigwigs with deeptools."
+	echo "bamCoverage -b ${i}.no_MT.mrkdup.bam --effectiveGenomeSize ${genome_size} --normalizeUsing RPGC --centerReads -o ${i}.for_genome_browser/${i}.no_MT.mrkdup.bw"	
+
+	bamCoverage -b ${i}.q10.s.bam --effectiveGenomeSize ${genome_size} --centerReads --normalizeUsing RPGC -o ${i}.for_genome_browser/${i}.no_MT.mrkdup.bw
+
+	#Create a homer tagdirectory from the 
+	makeTagDirectory ${i}_${ref_gen}_tagdir_no_MT ${i}.q10.s.bam 
+
+	#Clean up
+	echo "Cleaning up!"
+	mv ${i}.q10.s.bam* ${i}.pre_processed_files
+	rm *.bam *.bai *.fq.gz
+
+
+done
+
+#Note: The ATAC-pipeline fails after this script but complains that the bam-files are not sorted in query order. So I sort the final file with samtools sort -n and will retry.
+
+
+

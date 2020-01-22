@@ -1,0 +1,711 @@
+---
+title: "TAK_HSC_LMPP_rnaseq"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+# The first steps to create a count file are carried out wiht Homer to derive counts in mm10 and then I will try Per-Ludviks DESeq2 pipeline.
+
+analyzeRepeats.pl rna mm10 -condenseGenes -count exons -raw -d FL1HSC_347TK/FL1HSC_347TK.mm10.rsem/FL1HSC_347TK_STAR_RSEM_mm10_tagdir/ FL2HSC_347TK/FL2HSC_347TK.mm10.rsem/FL2HSC_347TK_STAR_RSEM_mm10_tagdir/ 3_ABM_HSC/3_ABM_HSC.mm10.rsem/3_ABM_HSC_STAR_RSEM_mm10_tagdir/ ABM1HSC_347TK/ABM1HSC_347TK.mm10.rsem/ABM1HSC_347TK_STAR_RSEM_mm10_tagdir/ ABM2HSC_347TK/ABM2HSC_347TK.mm10.rsem/ABM2HSC_347TK_STAR_RSEM_mm10_tagdir/ 2_FL_LMPP/2_FL_LMPP.mm10.rsem/2_FL_LMPP_STAR_RSEM_mm10_tagdir/ FL1_lmpp_347TK/FL1_lmpp_347TK.mm10.rsem/FL1_lmpp_347TK_STAR_RSEM_mm10_tagdir/ FL2_lmpp_347TK/FL2_lmpp_347TK.mm10.rsem/FL2_lmpp_347TK_STAR_RSEM_mm10_tagdir/ 4_ABM_LMPP/4_ABM_LMPP.mm10.rsem/4_ABM_LMPP_STAR_RSEM_mm10_tagdir/ ABM1_lmpp_347TK/ABM1_lmpp_347TK.mm10.rsem/ABM1_lmpp_347TK_STAR_RSEM_mm10_tagdir/ ABM2_lmpp_347TK/ABM2_lmpp_347TK.mm10.rsem/ABM2_lmpp_347TK_STAR_RSEM_mm10_tagdir/ 5_Lin28b_HSC/5_Lin28b_HSC.mm10.rsem/5_Lin28b_HSC_STAR_RSEM_mm10_tagdir/ L28HSC_347TK/L28HSC_347TK.mm10.rsem/L28HSC_347TK_STAR_RSEM_mm10_tagdir/ 7_Ctrl_HSC/7_Ctrl_HSC.mm10.rsem/7_Ctrl_HSC_STAR_RSEM_mm10_tagdir/ ctrlHSC_347TK/ctrlHSC_347TK.mm10.rsem/ctrlHSC_347TK_STAR_RSEM_mm10_tagdir/ 6_Lin28b_LMPP/6_Lin28b_LMPP.mm10.rsem/6_Lin28b_LMPP_STAR_RSEM_mm10_tagdir/ L28_lmpp_347TK/L28_lmpp_347TK.mm10.rsem/L28_lmpp_347TK_STAR_RSEM_mm10_tagdir/ 8_Ctrl_LMPP/8_Ctrl_LMPP.mm10.rsem/8_Ctrl_LMPP_STAR_RSEM_mm10_tagdir/ ctrl_lmpp_347TK/ctrl_lmpp_347TK.mm10.rsem/ctrl_lmpp_347TK_STAR_RSEM_mm10_tagdir/ > 181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression.txt
+
+```{r diff_analyis}
+colData <- data.frame(condition=c(rep("FL_HSC",2),rep("ABM_HSC",3),rep("FL_LMPP",3),rep("ABM_LMPP",3),rep("L28_HSC",2),rep("ctr_HSC",2),rep("L28_LMPP",2),rep("ctr_LMPP",2)), samples=c("FL1_HSC","FL2_HSC","ABM_HSC","ABM1_HSC","ABM2_HSC","FL_LMPP","FL1_lmpp","FL2_lmpp","ABM_LMPP","ABM1_lmpp","ABM2_lmpp","Lin28b_HSC","L28_HSC","Ctrl_HSC","CtrlHSC","Lin28b_LMPP","L28_lmpp","Ctrl_LMPP","ctrl_lmpp"))
+
+path_to_count_file <- "/Users/Jonas/Desktop/181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_counts.txt"
+# Count file must be n the format of "ID - chr - start - end - strand - length  - count_col1....count_col(n)"
+
+deseqAbs_object <- deseqAbs$new(name="HSC_LMPP", filename = path_to_count_file, colData = colData)
+deseqAbs_object$rawCounts <- ceiling(deseqAbs_object$rawCounts)
+deseqAbs_object$fullAuto()
+
+#Test for other categories
+conds <-gsub(pattern = "condition_",replacement = "",resultsNames(deseqAbs_object$deseq))
+# since CTR is the 2nd entry of the conds vector
+# make diffex analysis , and give it a name (without space is the best) that makes it easy to access later
+deseqAbs_object$makeDiffex(name = "testvstest2",c1 = c("FL_HSC"),c2=c("ABM_HSC"))
+test <-as.data.frame( deseqAbs_object$test$testvstest2 )
+#This gives only about 1000 genes compared to 2700 from the downloaded data. What if I just compare those two in a standard DESeq2-test.
+colData <- data.frame(condition=c(rep("FL_HSC",2),rep("ABM_HSC",3),rep("FL_LMPP",3),rep("ABM_LMPP",3),rep("L28_HSC",2),rep("ctr_HSC",2),rep("L28_LMPP",2),rep("ctr_LMPP",2)), samples=c("FL1_HSC","FL2_HSC","ABM_HSC","ABM1_HSC","ABM2_HSC","FL_LMPP","FL1_lmpp","FL2_lmpp","ABM_LMPP","ABM1_lmpp","ABM2_lmpp","Lin28b_HSC","L28_HSC","Ctrl_HSC","CtrlHSC","Lin28b_LMPP","L28_lmpp","Ctrl_LMPP","ctrl_lmpp"))
+counts <-read.delim("/Users/Jonas/Desktop/181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_counts_2.txt")
+sampleGroup<-matrix( factor(c(rep("FL_HSC",2),rep("ABM_HSC",3))), nrow=5, ncol=1)
+colData2 = data.frame(row.names = colnames(counts[,c(2:6)]), group = sampleGroup)
+counts[,2:6]<-ceiling(counts[,2:6])
+ddsseq<-DESeqDataSetFromMatrix(counts,colData = colData2, design = ~group, tidy = TRUE)
+dds <- DESeq(ddsseq)
+res1<-as.data.frame( results(dds, contrast=c('group','ABM_HSC', 'FL_HSC')))
+length(subset(res1,res1$padj<=0.05)[,1])
+#Gives about 1504 genes so considerably fewer.
+
+#Try PLBs pipeline on the ABM FL_HSC pair.
+colData2 <- data.frame(condition=c(rep("FL_HSC",2),rep("ABM_HSC",3)), samples=c("FL1_HSC","FL2_HSC","ABM_HSC","ABM1_HSC","ABM2_HSC"))
+path_to_count_file <- "/home/jonas/Documents/181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_counts_2.csv"
+deseqAbs_HSC <- deseqAbs$new(name="HSC", filename = path_to_count_file, colData = colData2)
+deseqAbs_HSC$rawCounts <- ceiling(deseqAbs_HSC$rawCounts)
+deseqAbs_HSC$fullAuto()
+test <-as.data.frame( deseqAbs_object$test$Default )
+length(subset(test,test$padj <=0.05)[,1])
+#2055 significant genes.
+#I will do the following. Create two test. One with the FL vs adult and another with L28 ABM comparison to partly avoid the multiple comparison problem.
+#ABM vs FL
+colData_FL_vs_HSC <- data.frame(condition=c(rep("FL_HSC",2),rep("ABM_HSC",3),rep("FL_LMPP",3),rep("ABM_LMPP",3)),samples=c("FL1_HSC","FL2_HSC","ABM_HSC","ABM1_HSC","ABM2_HSC","FL_LMPP","FL1_lmpp","FL2_lmpp","ABM_LMPP","ABM1_lmpp","ABM2_lmpp"))
+colData_FL_vs_HSC_v2 <- data.frame(condition=c(rep("FL_HSC",2),rep("ABM_HSC",2),rep("FL_LMPP",3),rep("ABM_LMPP",3)),samples=c("FL1_HSC","FL2_HSC","ABM1_HSC","ABM2_HSC","FL_LMPP","FL1_lmpp","FL2_lmpp","ABM_LMPP","ABM1_lmpp","ABM2_lmpp"))
+
+path_to_FL_vs_ABM_count_file <- "/home/jonas/Documents/181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_int_counts_FL_vs_ABM.txt"
+path_to_FL_vs_ABM_count_file_v2 <- "/Users/Jonas/Desktop/181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_counts_FL_vs_ABM_2.txt"
+deseqAbs_FLvsAdult <- deseqAbs$new(name="FLvsAdult", filename = path_to_FL_vs_ABM_count_file, colData = colData_FL_vs_HSC)
+deseqAbs_FLvsAdult$rawCounts <- ceiling(deseqAbs_FLvsAdult$rawCounts)
+deseqAbs_FLvsAdult$fullAuto()
+
+#Start to make pair-wise tables
+resultsNames(deseqAbs_FLvsAdult$deseq)
+deseqAbs_FLvsAdult$makeDiffex(name = "FLvsABM_HSC",c1 = c("FL_HSC"),c2=c("ABM_HSC"))
+deseqAbs_FLvsAdult$makeDiffex(name = "FLvsABM_LMPP",c1 = c("FL_LMPP"),c2=c("ABM_LMPP"))
+deseqAbs_FLvsAdult$makeDiffex(name = "FL_HSCvsLMPP",c1 = c("FL_HSC"),c2=c("FL_LMPP"))
+deseqAbs_FLvsAdult$makeDiffex(name = "ABM_HSCvsLMPP",c1 = c("ABM_HSC"),c2=c("ABM_LMPP"))
+
+FLvsABM_HSC_DESeq2 <-as.data.frame( deseqAbs_FLvsAdult$test$FLvsABM_HSC )
+colnames(FLvsABM_HSC_DESeq2)<-c("baseMean_FLvsABM_HSC","log2FC_FLvsABM_HSC","lfcSE_FLvsABM_HSC","stat_FLvsABM_HSC","pvalue_FLvsABM_HSC", "padj_FLvsABM_HSC")
+length(subset(FLvsABM_HSC_DESeq2,FLvsABM_HSC_DESeq2$padj_FLvsABM_HSC <= 0.05)[,1]) #1532 significant genes
+
+FLvsABM_LMPP_DESeq2 <-as.data.frame( deseqAbs_FLvsAdult$test$FLvsABM_LMPP )
+colnames(FLvsABM_LMPP_DESeq2)<-c("baseMean_FLvsABM_LMPP","log2FC_FLvsABM_LMPP","lfcSE_FLvsABM_LMPP","stat_FLvsABM_LMPP","pvalue_FLvsABM_LMPP", "padj_FLvsABM_LMPP")
+length(subset(FLvsABM_LMPP_DESeq2,FLvsABM_LMPP_DESeq2$padj_FLvsABM_LMPP <= 0.05)[,1]) #3367 significant genes
+
+FL_HSCvsLMPP_DESeq2 <-as.data.frame( deseqAbs_FLvsAdult$test$FL_HSCvsLMPP )
+colnames(FL_HSCvsLMPP_DESeq2)<-c("baseMean_FL_HSCvsLMPP","log2FC_FL_HSCvsLMPP","lfcSE_FL_HSCvsLMPP","stat_FL_HSCvsLMPP","pvalue_FL_HSCvsLMPP", "padj_FL_HSCvsLMPP")
+length(subset(FL_HSCvsLMPP_DESeq2,FL_HSCvsLMPP_DESeq2$padj_FL_HSCvsLMPP <= 0.05)[,1]) #3692
+
+ABM_HSCvsLMPP_DESeq2 <-as.data.frame( deseqAbs_FLvsAdult$test$ABM_HSCvsLMPP )
+colnames(ABM_HSCvsLMPP_DESeq2)<-c("baseMean_ABM_HSCvsLMPP","log2FC_ABM_HSCvsLMPP","lfcSE_ABM_HSCvsLMPP","stat_ABM_HSCvsLMPP","pvalue_ABM_HSCvsLMPP", "padj_ABM_HSCvsLMPP")
+length(subset(ABM_HSCvsLMPP_DESeq2,ABM_HSCvsLMPP_DESeq2$padj_ABM_HSCvsLMPP <= 0.05)[,1]) #3335
+
+#Create one big table for the FL vs ABM data.
+FL_vs_ABM_DESeq2_table <- cbind(FLvsABM_HSC_DESeq2,FLvsABM_LMPP_DESeq2,FL_HSCvsLMPP_DESeq2,ABM_HSCvsLMPP_DESeq2)
+FL_vs_ABM_DESeq2_table <- FL_vs_ABM_DESeq2_table[,c(2,5,6,8,11,12,14,17,18,20,23,24)]
+FL_vs_ABM_DESeq2_table$TranscriptID <-rownames(FL_vs_ABM_DESeq2_table)
+FL_vs_ABM_DESeq2_table <- FL_vs_ABM_DESeq2_table[,c(13,1:12)]
+
+#Add more features from the analyzeRNA file
+analyzeRNA <- read.delim("/mnt/data/common/yuan/rnaseq/181011_analyzeRNA_TK_HSC_LMPP_tpm_expression.txt",stringsAsFactors = F)
+colnames(analyzeRNA)[1]<-"TranscriptID"
+analyzeRNA <- analyzeRNA[,c(1,9,13:15)]
+FL_vs_ABM_DESeq2_table <-merge(FL_vs_ABM_DESeq2_table,analyzeRNA, by ="TranscriptID", all.x = T)
+FL_vs_ABM_DESeq2_table <- FL_vs_ABM_DESeq2_table[,c(1,14:17,2:16)]
+FL_vs_ABM_DESeq2_table <- FL_vs_ABM_DESeq2_table[,c(1:17)]
+
+
+#Same for L28 samples
+colData_L28 <- data.frame(condition=c(rep("L28_HSC",2),rep("ctr_HSC",2),rep("L28_LMPP",2),rep("ctr_LMPP",2)), samples=c("Lin28b_HSC","L28_HSC","Ctrl_HSC","CtrlHSC","Lin28b_LMPP","L28_lmpp","Ctrl_LMPP","ctrl_lmpp"))
+path_to_L28_count_file <- "/home/jonas/Documents/181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_counts_L28.csv"
+deseqAbs_L28 <- deseqAbs$new(name="L28", filename = path_to_L28_count_file, colData = colData_L28)
+deseqAbs_L28$rawCounts <- ceiling(deseqAbs_L28$rawCounts)
+deseqAbs_L28$fullAuto()
+
+#Start to make pair-wise tables
+deseqAbs_L28$makeDiffex(name = "L28HSCvsctrHSC",c1 = c("L28_HSC"),c2=c("ctr_HSC"))
+deseqAbs_L28$makeDiffex(name = "L28LMPPvsctrLMPP",c1 = c("L28_LMPP"),c2=c("ctr_LMPP"))
+deseqAbs_L28$makeDiffex(name = "L28_HSCvsLMPP",c1 = c("L28_HSC"),c2=c("L28_LMPP"))
+deseqAbs_L28$makeDiffex(name = "ctrl_HSCvsLMPP",c1 = c("ctr_HSC"),c2=c("ctr_LMPP"))
+
+L28HSCvsctrHSC_DESeq2 <-as.data.frame( deseqAbs_L28$test$L28HSCvsctrHSC )
+colnames(L28HSCvsctrHSC_DESeq2)<-c("baseMean_L28HSCvsctrHSC","log2FC_L28HSCvsctrHSC","lfcSE_L28HSCvsctrHSC","stat_L28HSCvsctrHSC","pvalue_L28HSCvsctrHSC", "padj_L28HSCvsctrHSC")
+length(subset(L28HSCvsctrHSC_DESeq2,L28HSCvsctrHSC_DESeq2$padj_L28HSCvsctrHSC <= 0.05)[,1]) #48 significant genes
+
+L28LMPPvsctrLMPP_DESeq2 <-as.data.frame( deseqAbs_L28$test$L28LMPPvsctrLMPP )
+colnames(L28LMPPvsctrLMPP_DESeq2)<-c("baseMean_L28LMPPvsctrLMPP","log2FC_L28LMPPvsctrLMPP","lfcSE_L28LMPPvsctrLMPP","stat_L28LMPPvsctrLMPP","pvalue_L28LMPPvsctrLMPP", "padj_L28LMPPvsctrLMPP")
+length(subset(L28LMPPvsctrLMPP_DESeq2,L28LMPPvsctrLMPP_DESeq2$padj_L28LMPPvsctrLMPP <= 0.05)[,1]) #2 significant genes
+
+L28_HSCvsLMPP_DESeq2 <-as.data.frame( deseqAbs_L28$test$L28_HSCvsLMPP )
+colnames(L28_HSCvsLMPP_DESeq2)<-c("baseMean_L28_HSCvsLMPP","log2FC_L28_HSCvsLMPP","lfcSE_L28_HSCvsLMPP","stat_L28_HSCvsLMPP","pvalue_L28_HSCvsLMPP", "padj_L28_HSCvsLMPP")
+length(subset(L28_HSCvsLMPP_DESeq2,L28_HSCvsLMPP_DESeq2$padj_L28_HSCvsLMPP <= 0.05)[,1]) #1646 significant genes
+
+ctrl_HSCvsLMPP_DESeq2 <-as.data.frame( deseqAbs_L28$test$ctrl_HSCvsLMPP )
+colnames(ctrl_HSCvsLMPP_DESeq2)<-c("baseMean_ctrl_HSCvsLMPP","log2FC_ctrl_HSCvsLMPP","lfcSE_ctrl_HSCvsLMPP","stat_ctrl_HSCvsLMPP","pvalue_ctrl_HSCvsLMPP", "padj_ctrl_HSCvsLMPP")
+length(subset(ctrl_HSCvsLMPP_DESeq2,ctrl_HSCvsLMPP_DESeq2$padj_ctrl_HSCvsLMPP <= 0.05)[,1]) #1029 significant genes
+
+#Create one big table for the L28 data.
+L28_DESeq2_table <- cbind(L28HSCvsctrHSC_DESeq2,L28LMPPvsctrLMPP_DESeq2,L28_HSCvsLMPP_DESeq2,ctrl_HSCvsLMPP_DESeq2)
+L28_DESeq2_table <- L28_DESeq2_table[,c(2,5,6,8,11,12,14,17,18,20,23,24)]
+L28_DESeq2_table$TranscriptID <-rownames(L28_DESeq2_table)
+L28_DESeq2_table <- L28_DESeq2_table[,c(13,1:12)]
+L28_DESeq2_table <-merge(L28_DESeq2_table,analyzeRNA, by ="TranscriptID", all.x = T)
+L28_DESeq2_table <- L28_DESeq2_table[,c(1,14:17,2:16)]
+L28_DESeq2_table <- L28_DESeq2_table[,c(1:17)]
+
+##################################################################################################################
+##################################################################################################################
+##################################################################################################################
+# A problem with the method above, even though it has been very good for the pcas and sample to sample variation plots, is that the "lonely" sample adds variation that is killing the data. This has to be dealt with but instead of removing it I will run DESeq2 via homer using batch correction and then read the result files in here.
+
+getDiffExpression.pl 181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_FL_vs_adult.txt FL_HSC FL_HSC BM_HSC BM_HSC BM_HSC FL_LMPP FL_LMPP FL_LMPP BM_LMPP BM_LMPP BM_LMPP -batch 2 2 1 2 2 1 2 2 1 2 2 -DESeq2 -AvsA > 181011_analyzeRepeats_TK_HSC_LMPP_DESeq2_diff_expression_FL_vs_adult.txt
+
+		Total Up-regulated in BM_HSC vs. FL_HSC: 1673 (6.827%) [log2fold>0, FDR<0.05]
+		Total Dn-regulated in BM_HSC vs. FL_HSC: 1521 (6.207%) [log2fold<-0, FDR<0.05]
+		
+		Total Up-regulated in BM_LMPP vs. FL_LMPP: 2437 (9.945%) [log2fold>0, FDR<0.05]
+		Total Dn-regulated in BM_LMPP vs. FL_LMPP: 2933 (11.968%) [log2fold<-0, FDR<0.05]
+		
+		Total Up-regulated in FL_LMPP vs. FL_HSC: 2932 (11.964%) [log2fold>0, FDR<0.05]
+		Total Dn-regulated in FL_LMPP vs. FL_HSC: 2684 (10.952%) [log2fold<-0, FDR<0.05]
+		
+		Total Up-regulated in BM_LMPP vs. BM_HSC: 2744 (11.197%) [log2fold>0, FDR<0.05]
+		Total Dn-regulated in BM_LMPP vs. BM_HSC: 2794 (11.401%) [log2fold<-0, FDR<0.05]
+
+
+
+FLvsABM_LMPP_atac_opening <- match_lists(FLvsABM_LMPP_atac_opening,FLvsABM_LMPP_atac_opening$Entrez.ID, BM_vs_FL_LMPP_genes_down$GeneID,10, name_match_column = "BM_vs_FL_LMPP_genes_down")
+sum(FLvsABM_LMPP_atac_opening$BM_vs_FL_LMPP_genes_down)
+
+getDiffExpression.pl 181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_L28.txt L28_HSC L28_HSC ctrl_HSC ctrl_HSC L28_LMPP L28_LMPP ctrl_LMPP ctrl_LMPP -batch 1 2 1 2 1 2 1 2  -log2fold 0 -AvsA -DESeq2 > 181011_analyzeRepeats_TK_HSC_LMPP_DESeq2_diff_expression_L28.txt
+
+		Total Up-regulated in ctrl_HSC vs. L28_HSC: 9 (0.037%) [log2fold>0, FDR<0.05]
+		Total Dn-regulated in ctrl_HSC vs. L28_HSC: 3 (0.012%) [log2fold<-0, FDR<0.05
+		                                                        
+		Total Up-regulated in ctrl_LMPP vs. L28_LMPP: 4 (0.016%) [log2fold>0, FDR<0.05]
+		Total Dn-regulated in ctrl_LMPP vs. L28_LMPP: 15 (0.061%) [log2fold<-0, FDR<0.05]		                                                        
+		Total Up-regulated in L28_LMPP vs. L28_HSC: 440 (1.795%) [log2fold>0, FDR<0.05]
+		Total Dn-regulated in L28_LMPP vs. L28_HSC: 452 (1.844%) [log2fold<-0, FDR<0.05]
+		
+		Total Up-regulated in ctrl_LMPP vs. ctrl_HSC: 766 (3.126%) [log2fold>0, FDR<0.05]
+		Total Dn-regulated in ctrl_LMPP vs. ctrl_HSC: 941 (3.840%) [log2fold<-0, FDR<0.05]		
+
+		#########################L28################################
+FL_vs_ABM_DESeq2_table <- read.delim("for_homer/181011_analyzeRepeats_TK_HSC_LMPP_DESeq2_diff_expression_FL_vs_adult.txt", stringsAsFactors = F)			  
+FL_vs_ABM_DESeq2_table <-merge(FL_vs_ABM_DESeq2_table,analyzeRNA, by ="TranscriptID", all.x = T)
+FL_vs_ABM_DESeq2_table <- FL_vs_ABM_DESeq2_table[,c(1,32:35,2:6,9:31)]
+
+L28_DESeq2_table <- read.delim("for_homer/181011_analyzeRepeats_TK_HSC_LMPP_DESeq2_diff_expression_L28.txt", stringsAsFactors = F)
+    ###########################################################
+
+                                                      
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r plotting, echo=FALSE}
+deseqAbs_object$sampleToSample()
+
+deseqAbs_object$pca()
+
+deseqAbs_FLvsAdult$sampleToSample()
+deseqAbs_FLvsAdult$pca()
+
+deseqAbs_L28$pca()
+```
+
+```{r peak_files}
+source("/home/jonas/R_scripts/match_list_function.R")
+#FLvsABM HSC diff peak files.
+FLvsABM_HSC_atac_opening <- read.delim("/mnt/data/common/yuan/atacseq/ENCODE_pipeline_processing/peak_files/diff_peak_analysis/yuan_atac_diff_peaks/FL_vs_adult.Up_FL_HSC_vs_BM_HSC.txt",stringsAsFactors = F)
+colnames(FLvsABM_HSC_atac_opening)[1]<-"PeakID"
+FLvsABM_HSC_atac_closing <- read.delim("/mnt/data/common/yuan/atacseq/ENCODE_pipeline_processing/peak_files/diff_peak_analysis/yuan_atac_diff_peaks/FL_vs_adult.Down_FL_HSC_vs_BM_HSC.txt",stringsAsFactors = F)
+colnames(FLvsABM_HSC_atac_closing)[1]<-"PeakID"
+
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$GeneID, FLvsABM_HSC_atac_opening$Entrez.ID,1, name_match_column = "FLvsABM_HSC_atac_opening")
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$GeneID, FLvsABM_HSC_atac_closing$Entrez.ID,10, name_match_column = "FLvsABM_HSC_atac_closing")
+FL_vs_ABM_DESeq2_table$FLvsABM_HSC_opening_closing <- FL_vs_ABM_DESeq2_table$FLvsABM_HSC_atac_opening + FL_vs_ABM_DESeq2_table$FLvsABM_HSC_atac_closing
+
+#Pull out genes with all FL_HSC matching peaks
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$GeneID, FL_HSC_peaks$Entrez.ID,1, name_match_column = "FL_HSC_peaks")
+
+FLvsBM_HSC_peaks <- FL_HSC_peaks
+colnames(FL_vs_ABM_DESeq2_table_genes_peaks)[37]<-"FLvsBM_HSC_peaks"
+
+FL_vs_ABM_DESeq2_table_genes_peaks <- subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$FL_HSC_peaks==1)
+
+
+ggplot(subset(FL_vs_ABM_DESeq2_table_genes_peaks,FL_vs_ABM_DESeq2_table_genes_peaks$FL_HSC_vs_BM_HSC_padj<=0.05),aes(FL_HSC_vs_BM_HSC_Log2FC, colour=factor(FLvsABM_HSC_opening_closing)))+stat_ecdf()+theme_bw()+xlim(-5,5)+theme(legend.position = c(0.8,0.25),legend.title=element_blank())+theme(legend.position = "bottom",legend.title=element_blank(), legend.key=element_rect(colour="NA", fill = "NA"))+scale_color_manual(values=c("0"="black","1"="blue", "10"="red", "11"="darkgoldenrod1"))
+
+#FLvsABM HSC LMPPs diff peak files.
+FLvsABM_LMPP_atac_opening <- read.delim("/mnt/data/common/yuan/atacseq/ENCODE_pipeline_processing/peak_files/diff_peak_analysis/yuan_atac_diff_peaks/FL_vs_adult.Up_FL_LMPP_vs_BM_LMPP.txt",stringsAsFactors = F)
+colnames(FLvsABM_LMPP_atac_opening)[1]<-"PeakID"
+FLvsABM_LMPP_atac_closing <- read.delim("/mnt/data/common/yuan/atacseq/ENCODE_pipeline_processing/peak_files/diff_peak_analysis/yuan_atac_diff_peaks/FL_vs_adult.Down_FL_LMPP_vs_BM_LMPP.txt",stringsAsFactors = F)
+colnames(FLvsABM_LMPP_atac_closing)[1]<-"PeakID"
+
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$GeneID, FLvsABM_LMPP_atac_opening$Entrez.ID,1, name_match_column = "FLvsABM_LMPP_atac_opening")
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$GeneID, FLvsABM_LMPP_atac_closing$Entrez.ID,10, name_match_column = "FLvsABM_LMPP_atac_closing")
+FL_vs_ABM_DESeq2_table$FLvsABM_LMPP_opening_closing <- FL_vs_ABM_DESeq2_table$FLvsABM_LMPP_atac_opening + FL_vs_ABM_DESeq2_table$FLvsABM_LMPP_atac_closing
+
+
+FLvsBM_LMPP_peaks <-read.delim("/mnt/data/common/yuan/atacseq/ENCODE_pipeline_processing/peak_files/FL_vs_adult/FL_vs_BM_LMPP_peaks.mm10_annotated.txt")
+colnames(FLvsBM_LMPP_peaks)[1]<-"PeakID"
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$GeneID, FLvsBM_LMPP_peaks$Entrez.ID ,1, name_match_column = "FLvsBM_LMPP_peaks")
+
+ggplot(subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$FL_LMPP_vs_BM_LMPP_padj<=0.05 & FL_vs_ABM_DESeq2_table$FLvsBM_LMPP_peaks==1),aes(FL_LMPP_vs_BM_LMPP_Log2FC, colour=factor(FLvsABM_LMPP_opening_closing)))+stat_ecdf()+theme_bw()+xlim(-5,5)+theme(legend.position = c(0.8,0.25),legend.title=element_blank())+theme(legend.position = "bottom",legend.title=element_blank(), legend.key=element_rect(colour="NA", fill = "NA"))+scale_color_manual(values=c("0"="black","1"="blue", "10"="red", "11"="darkgoldenrod1"))
+
+
+#Retrive up and downregulated genes for BM_HSC vs FL_HSC
+#List with mixed peak category removed.
+FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_HSC_peaks <- subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$FLvsABM_HSC_opening_closing !=11)		
+#List with mixed peak category included.
+FL_vs_ABM_DESeq2_table_mixed_BMvsFL_HSC_peaks <- subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$FLvsABM_HSC_opening_closing ==11)
+
+FLvsABM_HSC_atac_closing <- match_lists( FLvsABM_HSC_atac_closing, FLvsABM_HSC_atac_closing$Entrez.ID,FL_vs_ABM_DESeq2_table_mixed_BMvsFL_HSC_peaks$GeneID, 1, name_match_column = "Genes_mixed_peaks")
+
+FLvsABM_HSC_atac_opening <- match_lists( FLvsABM_HSC_atac_opening, FLvsABM_HSC_atac_opening$Entrez.ID,FL_vs_ABM_DESeq2_table_mixed_BMvsFL_HSC_peaks$GeneID, 1, name_match_column = "Genes_mixed_peaks")
+
+#Retrieve up and down-regulated genes that matched dynamic peaks without the mixed category.
+BM_vs_FL_HSC_genes_up <- subset(FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_HSC_peaks,FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_HSC_peaks$FL_HSC_vs_BM_HSC_Log2FC > log2(1.5) & FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_HSC_peaks$FL_HSC_vs_BM_HSC_padj <= 0.05)
+
+BM_vs_FL_HSC_genes_down <- subset(FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_HSC_peaks,FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_HSC_peaks$FL_HSC_vs_BM_HSC_Log2FC < -log2(1.5) & FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_HSC_peaks$FL_HSC_vs_BM_HSC_padj <= 0.05)
+		
+#Match that list back to the peaks so remove all peaks that are in both opening and closing list and sum the stats..
+FLvsABM_HSC_atac_closing <- match_lists(FLvsABM_HSC_atac_closing,FLvsABM_HSC_atac_closing$Entrez.ID, BM_vs_FL_HSC_genes_up$GeneID,1, name_match_column = "BM_vs_FL_HSC_genes_up")
+sum(FLvsABM_HSC_atac_closing$BM_vs_FL_HSC_genes_up)
+
+FLvsABM_HSC_atac_closing <- match_lists(FLvsABM_HSC_atac_closing,FLvsABM_HSC_atac_closing$Entrez.ID, BM_vs_FL_HSC_genes_down$GeneID,10, name_match_column = "BM_vs_FL_HSC_genes_down")
+sum(FLvsABM_HSC_atac_closing$BM_vs_FL_HSC_genes_down)
+
+FLvsABM_HSC_atac_opening <- match_lists(FLvsABM_HSC_atac_opening,FLvsABM_HSC_atac_opening$Entrez.ID, BM_vs_FL_HSC_genes_up$GeneID,1, name_match_column = "BM_vs_FL_HSC_genes_up")
+sum(FLvsABM_HSC_atac_opening$BM_vs_FL_HSC_genes_up)
+
+FLvsABM_HSC_atac_opening <- match_lists(FLvsABM_HSC_atac_opening,FLvsABM_HSC_atac_opening$Entrez.ID, BM_vs_FL_HSC_genes_down$GeneID,10, name_match_column = "BM_vs_FL_HSC_genes_down")
+sum(FLvsABM_HSC_atac_opening$BM_vs_FL_HSC_genes_down)
+
+#Retrive up and downregulated genes for BM_LMPP vs FL_LMPP
+#List with mixed peak category removed
+FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_LMPP_peaks <- subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$FLvsABM_LMPP_opening_closing !=11)		
+#List with mixed peak category included.
+FL_vs_ABM_DESeq2_table_mixed_BMvsFL_LMPP_peaks <- subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$FLvsABM_LMPP_opening_closing ==11)
+
+FLvsABM_LMPP_atac_closing <- match_lists( FLvsABM_LMPP_atac_closing, FLvsABM_LMPP_atac_closing$Entrez.ID,FL_vs_ABM_DESeq2_table_mixed_BMvsFL_LMPP_peaks$GeneID, 1, name_match_column = "Genes_mixed_peaks")
+
+FLvsABM_LMPP_atac_opening <- match_lists( FLvsABM_LMPP_atac_opening, FLvsABM_LMPP_atac_opening$Entrez.ID,FL_vs_ABM_DESeq2_table_mixed_BMvsFL_LMPP_peaks$GeneID, 1, name_match_column = "Genes_mixed_peaks")
+
+#Retrieve up and down-regulated genes that matched dynamic peaks without the mixed category.
+BM_vs_FL_LMPP_genes_up <- subset(FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_LMPP_peaks,FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_LMPP_peaks$FL_LMPP_vs_BM_LMPP_Log2FC > log2(1.5) & FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_LMPP_peaks$FL_LMPP_vs_BM_LMPP_padj <= 0.05)
+
+
+BM_vs_FL_LMPP_genes_down <- subset(FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_LMPP_peaks,FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_LMPP_peaks$FL_LMPP_vs_BM_LMPP_Log2FC < -log2(1.5) & FL_vs_ABM_DESeq2_table_no_mixed_BMvsFL_LMPP_peaks$FL_LMPP_vs_BM_LMPP_padj <= 0.05)
+
+#Match that list back to the peaks so remove all peaks that are in both opening and closing list and sum the stats.
+FLvsABM_LMPP_atac_closing <- match_lists(FLvsABM_LMPP_atac_closing,FLvsABM_LMPP_atac_closing$Entrez.ID, BM_vs_FL_LMPP_genes_up$GeneID,1, name_match_column = "BM_vs_FL_LMPP_genes_up")
+sum(FLvsABM_LMPP_atac_closing$BM_vs_FL_LMPP_genes_up)
+
+FLvsABM_LMPP_atac_closing <- match_lists(FLvsABM_LMPP_atac_closing,FLvsABM_LMPP_atac_closing$Entrez.ID, BM_vs_FL_LMPP_genes_down$GeneID,10, name_match_column = "BM_vs_FL_LMPP_genes_down")
+sum(FLvsABM_LMPP_atac_closing$BM_vs_FL_LMPP_genes_down)
+
+FLvsABM_LMPP_atac_opening <- match_lists(FLvsABM_LMPP_atac_opening,FLvsABM_LMPP_atac_opening$Entrez.ID, BM_vs_FL_LMPP_genes_up$GeneID,1, name_match_column = "BM_vs_FL_LMPP_genes_up")
+sum(FLvsABM_LMPP_atac_opening$BM_vs_FL_LMPP_genes_up)
+
+FLvsABM_LMPP_atac_opening <- match_lists(FLvsABM_LMPP_atac_opening,FLvsABM_LMPP_atac_opening$Entrez.ID, BM_vs_FL_LMPP_genes_down$GeneID,10, name_match_column = "BM_vs_FL_LMPP_genes_down")
+sum(FLvsABM_LMPP_atac_opening$BM_vs_FL_LMPP_genes_down)
+
+#The lists are written to file and can be subfiltered in excel for different GSEA groups.
+
+##################################################################
+################# Differentiation axis ###########################
+##################################################################
+
+BM_HSCvsLMPP_opening <-read.delim("/mnt/data/common/yuan/atacseq/ENCODE_pipeline_processing/peak_files/diff_peak_analysis/yuan_atac_diff_peaks/FL_vs_adult.Up_BM_LMPP_vs_BM_HSC.txt", stringsAsFactors = F)
+
+BM_HSCvsLMPP_closing <-read.delim("/mnt/data/common/yuan/atacseq/ENCODE_pipeline_processing/peak_files/diff_peak_analysis/yuan_atac_diff_peaks/FL_vs_adult.Down_BM_LMPP_vs_BM_HSC.txt", stringsAsFactors = F)
+
+FL_HSCvsLMPP_opening <-read.delim("/mnt/data/common/yuan/atacseq/ENCODE_pipeline_processing/peak_files/diff_peak_analysis/yuan_atac_diff_peaks/FL_vs_adult.Up_FL_LMPP_vs_FL_HSC.txt", stringsAsFactors = F)
+
+FL_HSCvsLMPP_closing <-read.delim("/mnt/data/common/yuan/atacseq/ENCODE_pipeline_processing/peak_files/diff_peak_analysis/yuan_atac_diff_peaks/FL_vs_adult.Down_FL_LMPP_vs_FL_HSC.txt", stringsAsFactors = F)
+
+BM_HSC_LMPP_peaks <- read.delim("/mnt/data/common/yuan/atacseq/ENCODE_pipeline_processing/peak_files/FL_vs_adult/BM_HSC_LMPP.merged.mm10_annotated.txt", stringsAsFactors = F)
+colnames(BM_HSC_LMPP_peaks)[1] <- "PeakID" 
+
+FL_HSC_LMPP_peaks <- read.delim("/mnt/data/common/yuan/atacseq/ENCODE_pipeline_processing/peak_files/FL_vs_adult/FL_HSC_LMPP.merged.mm10_annotated.txt", stringsAsFactors = F)
+colnames(FL_HSC_LMPP_peaks)[1] <- "PeakID" 
+
+#Match the peak lists against the FL_vs_ABM_DESeq2_table and ECDF plot the different categories against genes with peaks.
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$GeneID, BM_HSC_LMPP_peaks$Entrez.ID ,1, name_match_column = "BM_HSC_LMPP_peaks")
+
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$GeneID, FL_HSC_LMPP_peaks$Entrez.ID ,1, name_match_column = "FL_HSC_LMPP_peaks")
+
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$GeneID, BM_HSCvsLMPP_opening$Entrez.ID ,1, name_match_column = "BM_HSCvsLMPP_opening")
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$GeneID, BM_HSCvsLMPP_closing$Entrez.ID ,10, name_match_column = "BM_HSCvsLMPP_closing")
+FL_vs_ABM_DESeq2_table$BM_HSCvsLMPP_opening_closing <- FL_vs_ABM_DESeq2_table$BM_HSCvsLMPP_opening + FL_vs_ABM_DESeq2_table$BM_HSCvsLMPP_closing
+
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$GeneID, FL_HSCvsLMPP_opening$Entrez.ID ,1, name_match_column = "FL_HSCvsLMPP_opening")
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$GeneID, FL_HSCvsLMPP_closing$Entrez.ID ,10, name_match_column = "FL_HSCvsLMPP_closing")
+FL_vs_ABM_DESeq2_table$FL_HSCvsLMPP_opening_closing <- FL_vs_ABM_DESeq2_table$FL_HSCvsLMPP_opening  + FL_vs_ABM_DESeq2_table$FL_HSCvsLMPP_closing
+
+ggplot(subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$BM_HSC_vs_BM_LMPP_padj<=0.05 & FL_vs_ABM_DESeq2_table$BM_HSC_LMPP_peaks==1),aes(BM_HSC_vs_BM_LMPP_Log2FC, colour=factor(BM_HSCvsLMPP_opening_closing)))+stat_ecdf()+theme_bw()+xlim(-5,5)+theme(legend.position = c(0.8,0.25),legend.title=element_blank())+theme(legend.position = "bottom",legend.title=element_blank(), legend.key=element_rect(colour="NA", fill = "NA"))+scale_color_manual(values=c("0"="black","1"="blue", "10"="red", "11"="darkgoldenrod1"))
+
+ggplot(subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$FL_HSC_vs_FL_LMPP_padj<=0.05 & FL_vs_ABM_DESeq2_table$FL_HSC_LMPP_peaks==1),aes(FL_HSC_vs_FL_LMPP_Log2FC, colour=factor(FL_HSCvsLMPP_opening_closing)))+stat_ecdf()+theme_bw()+xlim(-5,5)+theme(legend.position = c(0.8,0.25),legend.title=element_blank())+theme(legend.position = "bottom",legend.title=element_blank(), legend.key=element_rect(colour="NA", fill = "NA"))+scale_color_manual(values=c("0"="black","1"="blue", "10"="red", "11"="darkgoldenrod1"))
+
+#Retrive up and downregulated genes for BM_HSC vs BM_LMPP
+#List with mixed peak category removed
+FL_vs_ABM_DESeq2_table_no_mixed_BM_HSCvsLMPP_peaks <- subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$BM_HSCvsLMPP_opening_closing!=11)		
+
+FL_vs_ABM_DESeq2_table_mixed_BM_HSCvsLMPP_peaks <- subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$BM_HSCvsLMPP_opening_closing==11)
+
+BM_HSCvsLMPP_atac_closing <- match_lists( BM_HSCvsLMPP_closing, BM_HSCvsLMPP_closing$Entrez.ID,FL_vs_ABM_DESeq2_table_mixed_BM_HSCvsLMPP_peaks$GeneID, 1, name_match_column = "Genes_mixed_peaks")
+
+BM_HSCvsLMPP_atac_opening <- match_lists( BM_HSCvsLMPP_opening, BM_HSCvsLMPP_opening$Entrez.ID,FL_vs_ABM_DESeq2_table_mixed_BM_HSCvsLMPP_peaks$GeneID, 1, name_match_column = "Genes_mixed_peaks")
+
+#Retrieve up and down-regulated genes that matched dynamic peaks without the mixed category.
+BM_HSCvsLMPP_genes_up <- subset(FL_vs_ABM_DESeq2_table_no_mixed_BM_HSCvsLMPP_peaks,FL_vs_ABM_DESeq2_table_no_mixed_BM_HSCvsLMPP_peaks$BM_HSC_vs_BM_LMPP_Log2FC > log2(1.5) & FL_vs_ABM_DESeq2_table_no_mixed_BM_HSCvsLMPP_peaks$BM_HSC_vs_BM_LMPP_padj <= 0.05)
+
+BM_HSCvsLMPP_genes_down <- subset(FL_vs_ABM_DESeq2_table_no_mixed_BM_HSCvsLMPP_peaks,FL_vs_ABM_DESeq2_table_no_mixed_BM_HSCvsLMPP_peaks$BM_HSC_vs_BM_LMPP_Log2FC < -log2(1.5) & FL_vs_ABM_DESeq2_table_no_mixed_BM_HSCvsLMPP_peaks$BM_HSC_vs_BM_LMPP_padj <= 0.05)
+
+#Match that list back to the peaks so remove all peaks that are in both opening and closing list and sum the stats.
+BM_HSCvsLMPP_atac_closing <- match_lists(BM_HSCvsLMPP_atac_closing,BM_HSCvsLMPP_atac_closing$Entrez.ID, BM_HSCvsLMPP_genes_up$GeneID,1, name_match_column = "BM_HSCvsLMPP_genes_up")
+sum(BM_HSCvsLMPP_atac_closing$BM_HSCvsLMPP_genes_up)
+
+BM_HSCvsLMPP_atac_closing <- match_lists(BM_HSCvsLMPP_atac_closing,BM_HSCvsLMPP_atac_closing$Entrez.ID, BM_HSCvsLMPP_genes_down$GeneID,10, name_match_column = "BM_HSCvsLMPP_genes_down")
+sum(BM_HSCvsLMPP_atac_closing$BM_HSCvsLMPP_genes_down)
+
+BM_HSCvsLMPP_atac_opening <- match_lists(BM_HSCvsLMPP_atac_opening,BM_HSCvsLMPP_atac_opening$Entrez.ID, BM_HSCvsLMPP_genes_up$GeneID,1, name_match_column = "BM_HSCvsLMPP_genes_up")
+sum(BM_HSCvsLMPP_atac_opening$BM_HSCvsLMPP_genes_up)
+
+BM_HSCvsLMPP_atac_opening <- match_lists(BM_HSCvsLMPP_atac_opening,BM_HSCvsLMPP_atac_opening$Entrez.ID, BM_HSCvsLMPP_genes_down$GeneID,10, name_match_column = "BM_HSCvsLMPP_genes_down")
+sum(BM_HSCvsLMPP_atac_opening$BM_HSCvsLMPP_genes_down)
+
+#Retrive up and downregulated genes for BM_HSC vs BM_LMPP
+#List with mixed peak category removed
+FL_vs_ABM_DESeq2_table_no_mixed_FL_HSCvsLMPP_peaks <- subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$FL_HSCvsLMPP_opening_closing!=11)		
+
+FL_vs_ABM_DESeq2_table_mixed_FL_HSCvsLMPP_peaks <- subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$FL_HSCvsLMPP_opening_closing==11)
+
+FL_HSCvsLMPP_atac_closing <- match_lists( FL_HSCvsLMPP_closing, FL_HSCvsLMPP_closing$Entrez.ID,FL_vs_ABM_DESeq2_table_mixed_FL_HSCvsLMPP_peaks $GeneID, 1, name_match_column = "Genes_mixed_peaks")
+
+FL_HSCvsLMPP_atac_opening <- match_lists( FL_HSCvsLMPP_opening, FL_HSCvsLMPP_opening$Entrez.ID,FL_vs_ABM_DESeq2_table_mixed_FL_HSCvsLMPP_peaks$GeneID, 1, name_match_column = "Genes_mixed_peaks")
+
+#Retrieve up and down-regulated genes that matched dynamic peaks without the mixed category.
+FL_HSCvsLMPP_genes_up <- subset(FL_vs_ABM_DESeq2_table_no_mixed_FL_HSCvsLMPP_peaks,FL_vs_ABM_DESeq2_table_no_mixed_FL_HSCvsLMPP_peaks$FL_HSC_vs_FL_LMPP_Log2FC > log2(1.5) & FL_vs_ABM_DESeq2_table_no_mixed_FL_HSCvsLMPP_peaks$FL_HSC_vs_FL_LMPP_padj <= 0.05)
+
+FL_HSCvsLMPP_genes_down <- subset(FL_vs_ABM_DESeq2_table_no_mixed_FL_HSCvsLMPP_peaks,FL_vs_ABM_DESeq2_table_no_mixed_FL_HSCvsLMPP_peaks$FL_HSC_vs_FL_LMPP_Log2FC < -log2(1.5) & FL_vs_ABM_DESeq2_table_no_mixed_FL_HSCvsLMPP_peaks$FL_HSC_vs_FL_LMPP_padj <= 0.05)
+
+#Match that list back to the peaks so remove all peaks that are in both opening and closing list and sum the stats.
+FL_HSCvsLMPP_atac_closing <- match_lists(FL_HSCvsLMPP_atac_closing,FL_HSCvsLMPP_atac_closing$Entrez.ID, FL_HSCvsLMPP_genes_up$GeneID,1, name_match_column = "FL_HSCvsLMPP_genes_up")
+sum(FL_HSCvsLMPP_atac_closing$FL_HSCvsLMPP_genes_up)
+
+FL_HSCvsLMPP_atac_closing <- match_lists(FL_HSCvsLMPP_atac_closing,FL_HSCvsLMPP_atac_closing$Entrez.ID, FL_HSCvsLMPP_genes_down$GeneID,10, name_match_column = "FL_HSCvsLMPP_genes_down")
+sum(FL_HSCvsLMPP_atac_closing$FL_HSCvsLMPP_genes_down)
+
+FL_HSCvsLMPP_atac_opening <- match_lists(FL_HSCvsLMPP_atac_opening,FL_HSCvsLMPP_atac_opening$Entrez.ID, FL_HSCvsLMPP_genes_up$GeneID,1, name_match_column = "FL_HSCvsLMPP_genes_up")
+sum(FL_HSCvsLMPP_atac_opening$FL_HSCvsLMPP_genes_up)
+
+FL_HSCvsLMPP_atac_opening <- match_lists(FL_HSCvsLMPP_atac_opening,FL_HSCvsLMPP_atac_opening$Entrez.ID, FL_HSCvsLMPP_genes_down$GeneID,10, name_match_column = "FL_HSCvsLMPP_genes_down")
+sum(FL_HSCvsLMPP_atac_opening$FL_HSCvsLMPP_genes_down)
+
+# Derive stage specific genes:
+
+Up_reg_gene_BMvsFL_HSC <- subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$FL_HSC_vs_BM_HSC_Log2FC >= log2(1.5) & FL_vs_ABM_DESeq2_table$FL_HSC_vs_BM_HSC_padj <= 0.05)
+Down_reg_gene_BMvsFL_HSC <- subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$FL_HSC_vs_BM_HSC_Log2FC <= -log2(1.5) & FL_vs_ABM_DESeq2_table$FL_HSC_vs_BM_HSC_padj <= 0.05)
+Up_reg_gene_BMvsFL_LMPP <- subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$FL_LMPP_vs_BM_LMPP_Log2FC >= log2(1.5) & FL_vs_ABM_DESeq2_table$FL_LMPP_vs_BM_LMPP_padj <= 0.05)
+Down_reg_gene_BMvsFL_LMPP <- subset(FL_vs_ABM_DESeq2_table,FL_vs_ABM_DESeq2_table$FL_LMPP_vs_BM_LMPP_Log2FC <= -log2(1.5) & FL_vs_ABM_DESeq2_table$FL_LMPP_vs_BM_LMPP_padj <= 0.05)
+
+Up_reg_gene_BMvsFL_HSC_LMPP_overlap <- merge(Up_reg_gene_BMvsFL_HSC, Up_reg_gene_BMvsFL_LMPP, by = "GeneID" )
+Down_reg_gene_BMvsFL_HSC_LMPP_overlap <- merge(Down_reg_gene_BMvsFL_HSC, Down_reg_gene_BMvsFL_LMPP, by = "GeneID" )
+
+write.table(Up_reg_gene_BMvsFL_HSC_LMPP_overlap,"Up_reg_gene_BMvsFL_HSC_LMPP_overlap_across_stages.txt", sep = "\t", row.names = F, quote = F)
+write.table(Down_reg_gene_BMvsFL_HSC_LMPP_overlap,"Down_reg_gene_BMvsFL_HSC_LMPP_overlap_across_stages.txt", sep = "\t", row.names = F, quote = F)
+
+#Derive genes that are uniquely up and down in FL and BM HSC and LMPPs BUT NOT overlapping.
+listA <- subset(FL_vs_ABM_DESeq2_table, FL_vs_ABM_DESeq2_table$FL_HSC_vs_FL_LMPP_padj <=  0.05  )
+
+listB <-  subset(FL_vs_ABM_DESeq2_table, FL_vs_ABM_DESeq2_table$BM_HSC_vs_BM_LMPP_padj <=  0.05  )
+
+up_FL_HSC_listA <- subset(listA,listA$FL_HSC_vs_FL_LMPP_Log2FC > 0 )
+up_BM_HSC_listB <- subset(listB,listB$BM_HSC_vs_BM_LMPP_Log2FC > 0 )
+up_FL_AND_BM_HSC <- merge(up_FL_HSC_listA, up_BM_HSC_listB, all = T, by = "GeneID")
+write.table(up_FL_AND_BM_HSC, "up_FL_AND_BM_HSC.txt", sep = "\t", row.names = F, quote = F)
+
+down_FL_HSC_listA <- subset(listA,listA$FL_HSC_vs_FL_LMPP_Log2FC < 0 )
+down_BM_HSC_listB <- subset(listB,listB$BM_HSC_vs_BM_LMPP_Log2FC < 0 )
+down_FL_AND_BM_HSC <- merge(down_FL_HSC_listA, down_BM_HSC_listB, all = T, by = "GeneID")
+write.table(down_FL_AND_BM_HSC, "down_FL_AND_BM_HSC.txt" , sep = "\t", row.names = F, quote = F)
+
+test2 <- test
+test2[,c(11:21,62:72)][is.na(test2[,c(11:21,62:72)])] <- 0
+test2$factor[ test2$FL_HSC_vs_BM_HSC_padj.x == "NA"] <- 1
+test2$factor[ test2$FL_HSC_vs_BM_HSC_padj.y == "NA"] <- 2
+
+ggplot(test2)+geom_point(aes(apply(test2[,c(11,12)],1,mean),apply(test2[,c(64:66)],1,mean), color=factor(factor)))
+
+write.table(test, "test.txt", , sep = "\t", row.names = F, quote = F)
+help(intersect)
+
+
+```
+```{r some_cleaning_up}
+
+FLvsAdult_dynamic_peaks <- list( FLvsABM_HSC_atac_closing = FLvsABM_HSC_atac_closing,FLvsABM_HSC_atac_opening = FLvsABM_HSC_atac_opening, FLvsABM_LMPP_atac_closing = FLvsABM_LMPP_atac_closing,FLvsABM_LMPP_atac_opening = FLvsABM_LMPP_atac_opening, FL_HSCvsLMPP_atac_closing = FL_HSCvsLMPP_atac_closing, FL_HSCvsLMPP_atac_opening = FL_HSCvsLMPP_atac_opening,  BM_HSCvsLMPP_atac_closing = BM_HSCvsLMPP_atac_closing, BM_HSCvsLMPP_atac_opening = BM_HSCvsLMPP_atac_opening )
+
+FLvsAdult_peak_lists <- list( FLvsBM_HSC_peaks = FLvsBM_HSC_peaks, FLvsBM_LMPP_peaks = FLvsBM_LMPP_peaks, FL_HSCvsLMPP_peaks = FL_HSC_LMPP_peaks, BM_HSCvsLMPP_peaks = BM_HSC_LMPP_peaks )
+
+TPM_lists <- list(FL_vs_ABM_tpm = FL_vs_ABM_tpm, L28_tpm = L28_tpm)
+
+```
+```{r tpm_manipulation}
+
+#Read in Homer derived tpm table.
+
+FL_vs_ABM_tpm <- read.delim("181011_analyzeRepeats_TK_HSC_LMPP_tpm_expression.txt", stringsAsFactors = F)
+FL_vs_ABM_tpm <- FL_vs_ABM_tpm[,c(1,8:19)]
+FL_vs_ABM_tpm <- merge(FL_vs_ABM_tpm,analyzeRNA, by = "TranscriptID", all.x = T)
+FL_vs_ABM_tpm <- merge(FL_vs_ABM_tpm,FL_vs_ABM_DESeq2_table, by = "GeneID", all.x = T)
+
+L28_tpm <- read.delim("181011_analyzeRepeats_TK_HSC_LMPP_tpm_expression.txt", stringsAsFactors = F)
+L28_tpm <- L28_tpm[,c(1,8:16)]
+L28_tpm <- merge(L28_tpm,analyzeRNA, by = "TranscriptID", all.x = T)
+colnames(L28_DESeq2_table)[1]<-"TranscriptID"
+L28_DESeq2_table <- merge(L28_DESeq2_table,analyzeRNA, by = "TranscriptID", all.x = T)
+L28_tpm <- merge(L28_tpm,L28_DESeq2_table, by = "GeneID", all.x = T)
+
+
+```
+```{r diffTF_comparison}
+
+FL_HSCvsBM_HSC_NFE2 <- read.delim("/Users/Jonas/Desktop/FL_HSCvsBM_HSC.all.NFE2.allBAMs.overlaps.mm10_annotated.txt", stringsAsFactors = F)
+
+colnames(FL_HSCvsBM_HSC_NFE2)[1] <-"PeakID"
+
+FL_HSCvsBM_HSC_NF2L2 <- read.delim("/Users/Jonas/Desktop/FL_HSCvsBM_HSC.all.NF2L2.allBAMs.overlaps.mm10_annotated.txt", stringsAsFactors = F)
+
+colnames(FL_HSCvsBM_HSC_NF2L2)[1]<-"PeakID"
+
+
+FL_HSCvsBM_HSC_MAFKS <- read.delim("/Users/Jonas/Desktop/FL_HSCvsBM_HSC.all.MAFK.S.allBAMs.overlaps.mm10_annotated.txt", stringsAsFactors = F)
+
+colnames(FL_HSCvsBM_HSC_MAFKS)[1]<-"PeakID"
+
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table, FL_vs_ABM_DESeq2_table$GeneID, FL_HSCvsBM_HSC_NFE2$Entrez.ID,1,name_match_column = "FL_HSCvsBM_HSC_NFE2")
+
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table, FL_vs_ABM_DESeq2_table$GeneID, FL_HSCvsBM_HSC_NF2L2$Entrez.ID,1,name_match_column = "FL_HSCvsBM_HSC_NF2L2")
+
+FL_vs_ABM_DESeq2_table <- match_lists(FL_vs_ABM_DESeq2_table, FL_vs_ABM_DESeq2_table$GeneID, FL_HSCvsBM_HSC_MAFKS$Entrez.ID,1,name_match_column = "FL_HSCvsBM_HSC_MAFKS")
+
+length( subset(FL_vs_ABM_DESeq2_table,abs(FL_vs_ABM_DESeq2_table$FL_HSC_vs_BM_HSC_Log2FC) >= log2(1.5) & FL_vs_ABM_DESeq2_table$FL_HSC_vs_BM_HSC_padj <= 0.05 & FL_vs_ABM_DESeq2_table$FL_HSCvsBM_HSC_NFE2 == 1)[,1] )
+
+write.table(subset(FL_vs_ABM_DESeq2_table,abs(FL_vs_ABM_DESeq2_table$FL_HSC_vs_BM_HSC_Log2FC) >= log2(1.5) & FL_vs_ABM_DESeq2_table$FL_HSC_vs_BM_HSC_padj <= 0.05 & FL_vs_ABM_DESeq2_table$FL_HSCvsBM_HSC_NFE2 == 1), "FL_HSCvsBM_HSC_NFE2_target_genes.txt", , sep = "\t", row.names = F, quote = F)
+
+write.table(subset(FL_vs_ABM_DESeq2_table,abs(FL_vs_ABM_DESeq2_table$FL_HSC_vs_BM_HSC_Log2FC) >= log2(1.5) & FL_vs_ABM_DESeq2_table$FL_HSC_vs_BM_HSC_padj <= 0.05 & FL_vs_ABM_DESeq2_table$FL_HSCvsBM_HSC_NF2L2 == 1), "FL_HSCvsBM_HSC_NF2L2_target_genes.txt", , sep = "\t", row.names = F, quote = F)
+
+write.table(subset(FL_vs_ABM_DESeq2_table,abs(FL_vs_ABM_DESeq2_table$FL_HSC_vs_BM_HSC_Log2FC) >= log2(1.5) & FL_vs_ABM_DESeq2_table$FL_HSC_vs_BM_HSC_padj <= 0.05 & FL_vs_ABM_DESeq2_table$FL_HSCvsBM_HSC_MAFKS == 1), "FL_HSCvsBM_HSC_MAFKS_target_genes.txt",  sep = "\t", row.names = F, quote = F)
+
+#Theese lists are not what I thought they were so remove them.
+rm(FL_HSCvsBM_HSC_NFE2)
+FL_vs_ABM_DESeq2_table <- FL_vs_ABM_DESeq2_table[,c(1:49)]
+
+```
+
+```{r comparison_with_atac_clusters_From_clust}
+FLvsABM_HSC_atac_opening_closing <- rbind(FLvsAdult_dynamic_peaks$FLvsABM_HSC_atac_opening, FLvsAdult_dynamic_peaks$FLvsABM_HSC_atac_closing)
+
+FLvsABM_LMPP_atac_opening_closing <- rbind(FLvsAdult_dynamic_peaks$FLvsABM_LMPP_atac_opening, FLvsAdult_dynamic_peaks$FLvsABM_LMPP_atac_closing) 
+
+FL_HSCvsLMPP_atac_opening_closing <- rbind(FLvsAdult_dynamic_peaks$FL_HSCvsLMPP_atac_opening, FLvsAdult_dynamic_peaks$FL_HSCvsLMPP_atac_closing) 
+
+BM_HSCvsLMPP_atac_opening_closing <- rbind(FLvsAdult_dynamic_peaks$BM_HSCvsLMPP_atac_opening, FLvsAdult_dynamic_peaks$BM_HSCvsLMPP_atac_closing) 
+
+clust_FLvsABM_HSC_atac_opening_closing <- read.delim("/Users/Jonas/Desktop/Clust_results/atacseq_diff_peaks/Clust_Results_FLvsABM_HSC_atac_opening_closing/FLvsABM_HSC_atac_opening_closing_peak_clusters.txt", stringsAsFactors = F)
+
+clust_FLvsABM_HSC_atac_opening_closing <- merge(clust_FLvsABM_HSC_atac_opening_closing, FLvsABM_HSC_atac_opening_closing, by = "PeakID", all.x = T)
+write.table(clust_FLvsABM_HSC_atac_opening_closing, "clust_FLvsABM_HSC_atac_opening_closing.txt", sep = "\t", row.names = F, quote = F)
+
+
+clust_FLvsABM_LMPP_atac_opening_closing <- read.delim("/Users/Jonas/Desktop/Clust_results/atacseq_diff_peaks/Clust_Results_FLvsABM_LMPP_atac_opening_closing/FLvsABM_LMPP_atac_opening_closing_peak_clusters.txt", stringsAsFactors = F)
+
+clust_FLvsABM_LMPP_atac_opening_closing <- merge(clust_FLvsABM_LMPP_atac_opening_closing, FLvsABM_LMPP_atac_opening_closing, by = "PeakID", all.x = T)
+write.table(clust_FLvsABM_LMPP_atac_opening_closing, "clust_FLvsABM_LMPP_atac_opening_closing.txt", sep = "\t", row.names = F, quote = F)
+
+clust_BM_HSCvsLMPP_atac_opening_closing <- read.delim("/Users/Jonas/Desktop/Clust_results/atacseq_diff_peaks/Clust_Results_BM_HSCvsLMPP_atac_opening_closing/BM_HSCvsLMPP_atac_opening_closing_peak_clusters.txt", stringsAsFactors = F)
+
+colnames(BM_HSCvsLMPP_atac_opening_closing)[1]<-"PeakID"
+clust_BM_HSCvsLMPP_atac_opening_closing <- merge(clust_BM_HSCvsLMPP_atac_opening_closing,BM_HSCvsLMPP_atac_opening_closing, by = "PeakID", all.x = T)
+write.table(clust_BM_HSCvsLMPP_atac_opening_closing, "clust_BM_HSCvsLMPP_atac_opening_closing.txt", sep = "\t", row.names = F, quote = F)
+
+clust_FL_HSCvsLMPP_atac_opening_closing <- read.delim("/Users/Jonas/Desktop/Clust_results/atacseq_diff_peaks/Clust_Results_FL_HSCvsLMPP_atac_opening_closing/FL_HSCvsLMPP_atac_opening_closing_peak_clusters.txt", stringsAsFactors = F)
+
+colnames(FL_HSCvsLMPP_atac_opening_closing)[1]<-"PeakID"
+clust_FL_HSCvsLMPP_atac_opening_closing <- merge(clust_FL_HSCvsLMPP_atac_opening_closing,FL_HSCvsLMPP_atac_opening_closing, by = "PeakID", all.x = T)
+write.table(clust_FL_HSCvsLMPP_atac_opening_closing, "clust_FL_HSCvsLMPP_atac_opening_closing.txt", sep = "\t", row.names = F, quote = F)
+
+clust_list_dynamic_peaks <- list(clust_FLvsABM_HSC_atac_opening_closing = clust_FLvsABM_HSC_atac_opening_closing, clust_FLvsABM_LMPP_atac_opening_closing = clust_FLvsABM_LMPP_atac_opening_closing,clust_BM_HSCvsLMPP_atac_opening_closing = clust_BM_HSCvsLMPP_atac_opening_closing, clust_FL_HSCvsLMPP_atac_opening_closing = clust_FL_HSCvsLMPP_atac_opening_closing)
+
+clust_FLvsABM_HSC_atac_opening_closing <- read.delim("/Users/Jonas/Desktop/Clust_results/atacseq_diff_peaks/Clust_Results_FLvsABM_HSC_atac_opening_closing/clust_FLvsABM_HSC_atac_opening_closing.txt", stringsAsFactors = F)
+
+clust_FLvsABM_LMPP_atac_opening_closing <- read.delim("/Users/Jonas/Desktop/Clust_results/atacseq_diff_peaks/Clust_Results_FLvsABM_LMPP_atac_opening_closing/clust_FLvsABM_LMPP_atac_opening_closing.txt", stringsAsFactors = F)
+
+clust_BM_HSCvsLMPP_atac_opening_closing <- read.delim("/Users/Jonas/Desktop/Clust_results/atacseq_diff_peaks/Clust_Results_BM_HSCvsLMPP_atac_opening_closing/clust_BM_HSCvsLMPP_atac_opening_closing.txt", stringsAsFactors = F)
+
+clust_FL_HSCvsLMPP_atac_opening_closing <- read.delim("/Users/Jonas/Desktop/Clust_results/atacseq_diff_peaks/Clust_Results_FL_HSCvsLMPP_atac_opening_closing/clust_FL_HSCvsLMPP_atac_opening_closing.txt", stringsAsFactors = F)
+
+
+write.table( subset(clust_FL_HSCvsLMPP_atac_opening_closing, clust_FL_HSCvsLMPP_atac_opening_closing$Cluster == "C11"), "clust_FL_HSCvsLMPP_atac_opening_closing_C11.txt", sep = "\t", row.names = F, quote = F)
+
+write.table( subset(clust_FLvsABM_HSC_atac_opening_closing, clust_FLvsABM_HSC_atac_opening_closing$Cluster == "C13"), "clust_FLvsABM_HSC_atac_opening_closing_C13.txt", sep = "\t", row.names = F, quote = F)
+
+write.table( subset(clust_FLvsABM_LMPP_atac_opening_closing, clust_FLvsABM_LMPP_atac_opening_closing$Cluster == "C13"), "clust_FLvsABM_LMPP_atac_opening_closing_C13.txt", sep = "\t", row.names = F, quote = F)
+
+write.table( subset(clust_BM_HSCvsLMPP_atac_opening_closing, clust_BM_HSCvsLMPP_atac_opening_closing$Cluster == "C13"), "clust_BM_HSCvsLMPP_atac_opening_closing_C13.txt", sep = "\t", row.names = F, quote = F)
+```
+
+```{r Derive_tpm_from_MkP-genes}
+#Genes
+FLvsABM_all_genes_tpm <- TPM_lists$FL_vs_ABM_tpm
+FLvsABM_all_genes_tpm <- FLvsABM_all_genes_tpm[,c(1:17)]
+
+megkp_genes <- read.delim("MkP_geneset.grp", col.names  = F,stringsAsFactors = F)
+colnames(megkp_genes)[1]<-"Gene"
+
+megkp_genes <- merge(megkp_genes, FLvsABM_all_genes_tpm, by.x = "Gene", by.y = "Symbol.x", all.x = T)
+
+megkp_genes <-  megkp_genes[complete.cases(megkp_genes),]
+
+write.table(megkp_genes, "megkp_genes_tpm.txt", row.names = F, quote = F, sep = "\t")
+
+megkp_genes_plotting <- read.delim("megkp_genes_tpm_for_clust.csv", stringsAsFactors = F)
+
+
+library(preprocessCore)
+mat <- as.matrix(megkp_genes_plotting[,2:12]) 
+
+mat <- as.data.frame( t( apply(mat, 1, scale)) )
+BM_HSC <- apply(mat[,1:3],1,mean) 
+BM_LMPP <- apply(mat[,4:6],1,mean)
+FL_HSC <- apply(mat[,7:8],1,mean)
+FL_LMPP <- apply(mat[,9:11],1,mean)
+
+mepk_norm <- as.data.frame ( cbind(BM_HSC,BM_LMPP,FL_HSC,FL_LMPP) )
+mepk_norm <- cbind(megkp_genes_plotting$ID, mepk_norm)
+
+colnames(mepk_norm)[1]<-"genes"
+
+library(reshape2)
+test <-melt(data = mepk_norm, id.vars = c("genes"))
+library(ggplot2)
+ggplot(data = test3, aes(x=variable, y=value, group=genes))+geom_line()
+
+BM_HSC_high_genes <- subset(mepk_norm,mepk_norm$BM_HSC > mepk_norm$FL_HSC & mepk_norm$BM_HSC >= 0.6 )
+test3 <- melt(data = BM_HSC_high_genes, id.vars = c("genes"))
+
+FL_HSC_high_genes <- subset(mepk_norm,mepk_norm$BM_HSC < mepk_norm$FL_HSC & mepk_norm$FL_HSC >= 0.6 )
+
+#Match these two gene lists in against the clustered peak file below.
+peaks_megpk_genes <- match_lists(peaks_megpk_genes, peaks_megpk_genes$Gene.Name, BM_HSC_high_genes$genes, 1, name_match_column = "BM_HSC_high_genes")
+
+peaks_megpk_genes <- match_lists(peaks_megpk_genes, peaks_megpk_genes$Gene.Name, FL_HSC_high_genes$genes, 10, name_match_column = "FL_HSC_high_genes")
+
+write.table(peaks_megpk_genes, "190304_Clust_peaks_megpk_genes.txt", quote = F, sep = "\t", row.names = F)
+
+#Peaks
+peaks_megpk_genes_clust <- read.delim("../peak_files/peaks_for_cluster/Clust_results/atacseq_diff_peaks/190304_FLvsHSC_peaks_megpk_genes_t_5_n_101_4/Clusters_Objects.tsv", stringsAsFactors = F)
+
+peaks_megpk_genes_clus_norm_values <- read.delim("../peak_files/peaks_for_cluster/Clust_results/atacseq_diff_peaks/190304_FLvsHSC_peaks_megpk_genes_t_5_n_101_4/Processed_Data/FLvsHSC_peaks_megpk_genes.tag_counts_for_clust.tsv_processed.tsv", stringsAsFactors = F)
+
+test_peaks <- subset(peaks_megpk_genes_clus_norm_values,peaks_megpk_genes_clus_norm_values$BM_HSC > peaks_megpk_genes_clus_norm_values$FL_HSC  & peaks_megpk_genes_clus_norm_values$BM_HSC > peaks_megpk_genes_clus_norm_values$BM_LMPP& peaks_megpk_genes_clus_norm_values$BM_HSC > 0.5 )
+
+test2_peaks <- melt(data = test_peaks, id.vars = c("Genes"))
+
+
+ggplot(data = test2_peaks, aes(x=variable, y=value, group=Genes))+geom_line()
+
+#This approach does not work here so revert back to the Clust clusters
+
+peaks_megpk_genes <- read.delim("../peak_files/peaks_for_cluster/Clust_results/atacseq_diff_peaks/190304_FLvsHSC_peaks_megpk_genes_t_5_n_101_4/clust_grps_megpk_peaks_t_5_n_101_4.txt", stringsAsFactors = F)
+
+#Turn the test_peaks into a real peak_list and match it to BM_HSC_high_genes
+
+BM_HSC_high_peaks <- as.data.frame( test_peaks[,1] )
+colnames(BM_HSC_high_peaks)[1]<-"PeakID"
+
+BM_HSC_high_peaks <- merge(BM_HSC_high_peaks, peaks_megpk_genes, by = "PeakID", all.x = T)
+
+BM_HSC_high_peaks <- BM_HSC_high_peaks[complete.cases(BM_HSC_high_peaks), ]
+
+
+write.table(BM_HSC_high_peaks, "190309_BM_HSC_high_peaks.txt", quote = F, sep = "\t", row.names = F)
+```
+
+```{r diff_peaks_with_motifs}
+
+opening_BM_GATA1 <- read.delim("motifs_in_diff_peaks_homer_annotated_peaks/FL_vs_adult.Down_FL_HSC_vs_BM_HSC.GATA1_fpr_0.05.mm10_annotated.txt", stringsAsFactors = F)
+closing_BM_GATA1 <- read.delim("motifs_in_diff_peaks_homer_annotated_peaks/FL_vs_adult.Up_FL_HSC_vs_BM_HSC.GATA1_fpr_0.05.mm10_annotated.txt", stringsAsFactors = F)
+
+opening_BM_NFE2 <- read.delim("motifs_in_diff_peaks_homer_annotated_peaks/FL_vs_adult.Down_FL_HSC_vs_BM_HSC.NFE2_fpr_0.05.mm10_annotated.txt", stringsAsFactors = F)
+closing_BM_NFE2 <- read.delim("motifs_in_diff_peaks_homer_annotated_peaks/FL_vs_adult.Up_FL_HSC_vs_BM_HSC.NFE2_fpr_0.05.mm10_annotated.txt", stringsAsFactors = F)
+
+genes_to_match <- FL_vs_ABM_DESeq2_table[,c(4,11:15,22,24)]
+
+opening_BM_GATA1 <-merge(opening_BM_GATA1, genes_to_match, by.x = "Entrez.ID", by.y = "GeneID", all.x = T)
+closing_BM_GATA1 <-merge(closing_BM_GATA1, genes_to_match, by.x = "Entrez.ID", by.y = "GeneID", all.x = T)
+
+
+opening_BM_NFE2 <-merge(opening_BM_NFE2, genes_to_match, by.x = "Entrez.ID", by.y = "GeneID", all.x = T)
+closing_BM_NFE2 <-merge(closing_BM_NFE2, genes_to_match, by.x = "Entrez.ID", by.y = "GeneID", all.x = T)
+
+write.table(opening_BM_GATA1,"motifs_in_diff_peaks_homer_annotated_peaks/FL_vs_adult.Down_FL_HSC_vs_BM_HSC.GATA1_fpr_0.05.mm10_annotated_corresponding_expression.txt", sep = "\t", row.names = F, quote = F)
+write.table(closing_BM_GATA1,"motifs_in_diff_peaks_homer_annotated_peaks/FL_vs_adult.Up_FL_HSC_vs_BM_HSC.GATA1_fpr_0.05.mm10_annotated_corresponding_expression.txt", sep = "\t", row.names = F, quote = F)
+write.table(opening_BM_NFE2,"motifs_in_diff_peaks_homer_annotated_peaks/FL_vs_adult.Down_FL_HSC_vs_BM_HSC.NFE2_fpr_0.05.mm10_annotated_corresponding_expression.txt", sep = "\t", row.names = F, quote = F)
+write.table(closing_BM_NFE2,"motifs_in_diff_peaks_homer_annotated_peaks/FL_vs_adult.Up_FL_HSC_vs_BM_HSC.NFE2_fpr_0.05.mm10_annotated_corresponding_expression.txt", sep = "\t", row.names = F, quote = F)
+
+diff_peaks_with_motifs_list <- list(opening_BM_GATA1 = opening_BM_GATA1, closing_BM_GATA1 = closing_BM_GATA1, opening_BM_NFE2 = opening_BM_NFE2, closing_BM_NFE2 = closing_BM_NFE2)
+
+rm(opening_BM_NFE2)
+
+
+```
+
+```{r NFE2_public_peaks_in_genes}
+
+#Read in the NFE2 mature MK-bound unique peaks.
+NFE2_MKD5_unique_peaks <- read.delim("/mnt/data/common/yuan/atacseq/ENCODE_pipeline_processing/peak_files/NFE2_ChIP_Shivdasani/NFE2_MKD5.RBC2D.MKD5_unique.mm10_annotated.txt", stringsAsFactors = F)
+
+FL_vs_ABM_tpm <- TPM_lists$FL_vs_ABM_tpm
+
+FL_vs_ABM_tpm <- match_lists(FL_vs_ABM_tpm, FL_vs_ABM_tpm$GeneID, NFE2_MKD5_unique_peaks$Entrez.ID,1, name_match_column = "NFE2_MKD5_unique_peaks")
+
+FL_vs_ABM_tpm_BMvsFLHSC_genes_MKD5_unique_peak <- subset( FL_vs_ABM_tpm,FL_vs_ABM_tpm$FL_HSC_vs_BM_HSC_padj <= 0.05 & abs(FL_vs_ABM_tpm$FL_HSC_vs_BM_HSC_Log2FC) >= log2(1.5) & FL_vs_ABM_tpm$NFE2_MKD5_unique_peaks == 1 )
+
+write.table(FL_vs_ABM_tpm_BMvsFLHSC_genes_MKD5_unique_peak,"FL_vs_ABM_tpm_BMvsFLHSC_genes_MKD5_unique_peak.txt", sep = "\t", quote = F, row.names = F)
+```
+```{r diff_atac_peaks_in_CD41negvspos_genes}
+#Gene expression data from non-stressed (GSE133947)
+
+cd41_diff_rna <- read.delim("/mnt/data/common/public_data/rnaseq/191002_analyzeRepeats_CD41_neg_vs_pos.Deseq2_diff_expression.txt", stringsAsFactors = F)
+
+colnames(cd41_diff_rna)[1] <- "TranscriptID"
+
+cd41_diff_rna <- merge(cd41_diff_rna, analyzeRNA, by = "TranscriptID", all.x = T)
+
+cd41_diff_rna <- match_lists(cd41_diff_rna,cd41_diff_rna$GeneID, FLvsAdult_dynamic_peaks$FLvsABM_HSC_atac_opening$Entrez.ID,1,name_match_column = "FLvsABM_HSC_atac_opening")
+
+cd41_diff_rna <- match_lists(cd41_diff_rna,cd41_diff_rna$GeneID, FLvsAdult_dynamic_peaks$FLvsABM_HSC_atac_closing$Entrez.ID,10,name_match_column = "FLvsABM_HSC_atac_closing")
+
+#Add in non-dynamic peaks
+FLvsBM_HSC_non_dynamic <- read.delim("/mnt/data/common/yuan/atacseq/ENCODE_pipeline_processing/peak_files/diff_peak_analysis/yuan_atac_diff_peaks/180212_FL_vs_adult_edgeR_diff_peak_analysis.txt", stringsAsFactors = F)
+
+colnames(FLvsBM_HSC_non_dynamic)[1] <- "PeakID"
+
+library(dplyr)
+FLvsABM_HSC_atac_opening_closing <- rbind(FLvsAdult_dynamic_peaks$FLvsABM_HSC_atac_closing,FLvsAdult_dynamic_peaks$FLvsABM_HSC_atac_opening)
+
+FLvsBM_HSC_non_dynamic <- anti_join(FLvsBM_HSC_non_dynamic,FLvsABM_HSC_atac_opening_closing, by = "PeakID")
+FLvsBM_HSC_non_dynamic <- subset(FLvsBM_HSC_non_dynamic,FLvsBM_HSC_non_dynamic$BM_HSC.vs..FL_HSC.adj..p.value > 0.1)
+
+#This is a hard cut-off. Maybe I will safe up and set p-value for non-dynamic > 0.1.
+
+
+cd41_diff_rna$FLvsABM_HSC_atac_opening_closing <- cd41_diff_rna$FLvsABM_HSC_atac_opening + cd41_diff_rna$FLvsABM_HSC_atac_closing
+
+cd41_diff_rna <- match_lists(cd41_diff_rna,cd41_diff_rna$GeneID, FLvsBM_HSC_non_dynamic$Entrez.ID, 1000, name_match_column = "non_dynamic_peaks")
+
+cd41_diff_rna <- subset(cd41_diff_rna,cd41_diff_rna$non_dynamic_peaks == 1000)
+
+library(ggplot2)
+
+ggplot(subset(cd41_diff_rna,cd41_diff_rna$CD41neg.vs..CD41pos.adj..p.value <=0.05),aes(CD41neg.vs..CD41pos.Log2.Fold.Change, colour=factor(FLvsABM_HSC_atac_opening_closing)))+stat_ecdf()+theme_bw()+xlim(-5,5)+theme(legend.position = c(0.8,0.25),legend.title=element_blank())+theme(legend.position = "bottom",legend.title=element_blank(), legend.key=element_rect(colour="NA", fill = "NA"))+scale_color_manual(values=c("0"="black","1"="red", "10"="blue", "11"="gold"))
+
+
+
+
+```

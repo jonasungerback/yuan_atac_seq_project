@@ -1,0 +1,656 @@
+---
+title: "bulk_atac_diff_peak_snap_atac_analysis"
+output: html_document
+---
+
+```{r scATAC_pro_preprocessing, include=FALSE, #bash_commands}
+#configure file
+/mnt/data/common/jonas/atacseq/for_scatac_pro/FL_HSC_test/FL_HSC_test_configure_user.txt
+#cate
+cat FL_HSC_S4_L001_R1_001.fastq.gz FL_HSC_S4_L002_R1_001.fastq.gz > FL_HSC.R1.fastq.gz
+cat FL_HSC_S4_L001_R2_001.fastq.gz FL_HSC_S4_L002_R2_001.fastq.gz > FL_HSC.R2.fastq.gz
+cat FL_HSC_S4_L001_R3_001.fastq.gz FL_HSC_S4_L002_R3_001.fastq.gz > FL_HSC.R3.fastq.gz
+cat FL_HSC_S4_L001_I1_001.fastq.gz FL_HSC_S4_L002_I1_001.fastq.gz > FL_HSC.I1.fastq.gz
+
+cat ABM_CD41neg_S3_L001_R1_001.fastq.gz ABM_CD41neg_S3_L002_R1_001.fastq.gz > ABM_CD41neg.R1.fastq.gz
+cat ABM_CD41neg_S3_L001_R2_001.fastq.gz ABM_CD41neg_S3_L002_R2_001.fastq.gz > ABM_CD41neg.R2.fastq.gz
+cat ABM_CD41neg_S3_L001_R3_001.fastq.gz ABM_CD41neg_S3_L002_R3_001.fastq.gz > ABM_CD41neg.R3.fastq.gz
+cat ABM_CD41neg_S3_L001_I1_001.fastq.gz ABM_CD41neg_S3_L002_I1_001.fastq.gz > ABM_CD41neg.I1.fastq.gz
+
+cat ABM_CD41pos_S2_L001_R1_001.fastq.gz ABM_CD41pos_S2_L002_R1_001.fastq.gz > ABM_CD41pos.R1.fastq.gz
+cat ABM_CD41pos_S2_L001_R2_001.fastq.gz ABM_CD41pos_S2_L002_R2_001.fastq.gz > ABM_CD41pos.R2.fastq.gz
+cat ABM_CD41pos_S2_L001_R3_001.fastq.gz ABM_CD41pos_S2_L002_R3_001.fastq.gz > ABM_CD41pos.R3.fastq.gz
+cat ABM_CD41pos_S2_L001_I1_001.fastq.gz ABM_CD41pos_S2_L002_I1_001.fastq.gz > ABM_CD41pos.I1.fastq.gz
+
+cat ABM_MkP_S1_L001_R1_001.fastq.gz ABM_MkP_S1_L002_R1_001.fastq.gz > ABM_MkP.R1.fastq.gz
+cat ABM_MkP_S1_L001_R2_001.fastq.gz ABM_MkP_S1_L002_R2_001.fastq.gz > ABM_MkP.R2.fastq.gz
+cat ABM_MkP_S1_L001_R3_001.fastq.gz ABM_MkP_S1_L002_R3_001.fastq.gz > ABM_MkP.R3.fastq.gz
+cat ABM_MkP_S1_L001_I1_001.fastq.gz ABM_MkP_S1_L002_I1_001.fastq.gz > ABM_MkP.I1.fastq.gz
+
+#Now put the different samples together in the right order
+cat FL_HSC.R1.fastq.gz ABM_CD41neg.R1.fastq.gz ABM_CD41pos.R1.fastq.gz ABM_MkP.R1.fastq.gz > HSCandMkP.R1.fastq.gz
+cat FL_HSC.R2.fastq.gz ABM_CD41neg.R2.fastq.gz ABM_CD41pos.R2.fastq.gz ABM_MkP.R2.fastq.gz > HSCandMkP.R2.fastq.gz
+cat FL_HSC.R3.fastq.gz ABM_CD41neg.R3.fastq.gz ABM_CD41pos.R3.fastq.gz ABM_MkP.R3.fastq.gz > HSCandMkP.R3.fastq.gz
+cat FL_HSC.I1.fastq.gz ABM_CD41neg.I1.fastq.gz ABM_CD41pos.I1.fastq.gz ABM_MkP.I1.fastq.gz > HSCandMkP.I1.fastq.gz
+
+scATAC-pro -s process -i HSCandMkP.R1.fastq.gz,HSCandMkP.R3.fastq.gz,HSCandMkP,HSCandMkP.R2.fastq.gz -c HSCandMkP_configure_user.txt
+
+
+```
+
+
+
+```{r cellranger_counts, on Lsens2}
+#Use the, by Björn, demultiplexed fastqs and setup one SLURM-script for each.
+#Set up the script and run for samples ABM_CD41neg ABM_CD41pos ABM_MkP and FL_HSC:
+
+cell_ranger_ref="/projects/fs5/jonun/scatacseq/10Xindices/refdata-cellranger-atac-mm10-1.2.0"
+fastq_path="/projects/fs5/jonun/scatacseq/191204_A00681_0057_BHHTF7DRXX_jy_HSC/cellranger_out/outs/fastq_path/HHTF7DRXX/ABM_CD41neg"
+sample_name="ABM_CD41neg"
+# Load the modules
+module purge
+module load cellranger-atac/1.0.1
+
+cellranger-atac count --id=${sample_name} --reference=${cell_ranger_ref} --fastqs=${fastq_path} --sample=${sample_name}
+
+
+sbatch 191209_cellranger_count_scatac_ABM_CD41neg.skript
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r preprocess_snap_atac, echo=FALSE}
+#Catenate R1,R3 and R2 as above
+#Create a preprocess script and run as follows
+bash snapatac_preprocess.skript  2>&1 | tee 190930_snapatac_preprocessins.log
+#Do not forget to change the date of the log to 191210
+
+```
+```{r snap_atac_barcode_filtering, echo=FALSE}
+library(SnapATAC)
+library(viridisLite)
+library(ggplot2)
+library(stringr)
+#Create an experiment from multiple samples.
+file.list = c("/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/FL_HSC/FL_HSC.snap/FL_HSC.snap","/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/ABM_CD41neg/ABM_CD41neg.snap/ABM_CD41neg.snap","/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/ABM_CD41pos/ABM_CD41pos.snap/ABM_CD41pos.snap","/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/ABM_MkP/ABM_MkP.snap/ABM_MkP.snap")
+
+sample.list=c("FL_HSC","CD41neg","CD41pos","MkP")
+
+x.sp = createSnap(file=file.list, sample=sample.list)
+# I must filter the barcodes. Can I use the ones filtered already in the cellranger filtering.
+barcodes_FL_HSC = read.csv("/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/cellranger_singlecell/FL_HSC_2000_cells.singlecell.csv",head=TRUE)
+
+barcodes_ABM_CD41neg = read.csv("/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/cellranger_singlecell/ABM_CD41neg_2000_cells.singlecell.csv",head=TRUE)
+
+barcodes_ABM_CD41pos = read.csv("/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/cellranger_singlecell/ABM_CD41pos_1000_cells.singlecell.csv",head=TRUE)
+
+barcodes_ABM_MkP = read.csv("/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/cellranger_singlecell/ABM_MkP_2400_cells.singlecell.csv",head=TRUE)
+
+#Add a unique tag:
+barcodes_FL_HSC <- barcodes_FL_HSC[2:nrow(barcodes_FL_HSC),]
+barcodes_ABM_CD41neg <- barcodes_ABM_CD41neg[2:nrow(barcodes_ABM_CD41neg),]
+barcodes_ABM_CD41pos <- barcodes_ABM_CD41pos[2:nrow(barcodes_ABM_CD41pos),]
+barcodes_ABM_MkP <- barcodes_ABM_MkP [2:nrow(barcodes_ABM_MkP ),]
+
+#barcodes_FL_HSC
+barcodes_FL_HSC$barcode <- as.character( barcodes_FL_HSC$barcode )
+s <- str_split_fixed(barcodes_FL_HSC$barcode, "-",2)
+barcodes_FL_HSC <- cbind(s[,1], barcodes_FL_HSC[,2:max(ncol(barcodes_FL_HSC))])
+colnames(barcodes_FL_HSC)[1] <-"barcode"
+barcodes_FL_HSC$barcode <- paste(barcodes_FL_HSC$barcode,"FL_HSC", sep = "_")
+barcodes_FL_HSC$barcode <- factor(barcodes_FL_HSC$barcode )
+
+#barcodes_ABM_CD41neg
+barcodes_ABM_CD41neg$barcode <- as.character( barcodes_ABM_CD41neg$barcode )
+s <- str_split_fixed(barcodes_ABM_CD41neg$barcode, "-",2)
+barcodes_ABM_CD41neg <- cbind(s[,1], barcodes_ABM_CD41neg[,2:max(ncol(barcodes_ABM_CD41neg))])
+colnames(barcodes_ABM_CD41neg)[1] <-"barcode"
+barcodes_ABM_CD41neg$barcode <- paste(barcodes_ABM_CD41neg$barcode,"ABM_CD41neg", sep = "_")
+barcodes_ABM_CD41neg$barcode <- factor(barcodes_ABM_CD41neg$barcode )
+
+#barcodes_ABM_CD41pos
+barcodes_ABM_CD41pos$barcode <- as.character( barcodes_ABM_CD41pos$barcode )
+s <- str_split_fixed(barcodes_ABM_CD41pos$barcode, "-",2)
+barcodes_ABM_CD41pos <- cbind(s[,1], barcodes_ABM_CD41pos[,2:max(ncol(barcodes_ABM_CD41pos))])
+colnames(barcodes_ABM_CD41pos)[1] <-"barcode"
+barcodes_ABM_CD41pos$barcode <- paste(barcodes_ABM_CD41pos$barcode,"ABM_CD41pos", sep = "_")
+barcodes_ABM_CD41pos$barcode <- factor(barcodes_ABM_CD41pos$barcode )
+
+#barcodes_ABM_MkP
+barcodes_ABM_MkP$barcode <- as.character( barcodes_ABM_MkP$barcode )
+s <- str_split_fixed(barcodes_ABM_MkP$barcode, "-",2)
+barcodes_ABM_MkP <- cbind(s[,1], barcodes_ABM_MkP[,2:max(ncol(barcodes_ABM_MkP))])
+colnames(barcodes_ABM_MkP)[1] <-"barcode"
+barcodes_ABM_MkP$barcode <- paste(barcodes_ABM_MkP$barcode,"ABM_MkP", sep = "_")
+barcodes_ABM_MkP$barcode <- factor(barcodes_ABM_MkP$barcode )
+
+barcodes = rbind(barcodes_FL_HSC,barcodes_ABM_CD41neg,barcodes_ABM_CD41pos,barcodes_ABM_MkP)
+
+promoter_ratio = (barcodes$promoter_region_fragments+1) / (barcodes$passed_filters + 1)
+UMI = log(barcodes$passed_filters+1, 10)
+data = data.frame(UMI=UMI, promoter_ratio=promoter_ratio)
+barcodes$promoter_ratio = promoter_ratio
+library(viridisLite);
+library(ggplot2);
+
+p1 = ggplot(data, aes(x= UMI, y= promoter_ratio)) + geom_point(size=0.1, col="grey") + ggtitle("10X HSCs") + ylim(0, 1) + xlim(0, 6) + labs(x = "log10(UMI)", y="promoter ratio") 
+
+p1 + geom_hline(yintercept = 0.23) + geom_vline(xintercept = 4.15)
+
+
+barcodes.sel = barcodes[which(UMI >= 4.15 & UMI <= 6 & promoter_ratio >= 0.23 & promoter_ratio <= 0.6),]
+
+
+rownames(barcodes.sel) = barcodes.sel$barcode
+table(x.sp@sample) 
+#CD41neg CD41pos  FL_HSC     MkP 
+#  96730  100420   25352   50565 
+
+#Creating x.sp2 as a backup.
+x.sp2 <- x.sp
+#Add a unique string to each barcode so it can be matched to the snap-file properly.
+x.sp2@metaData$barcode <- as.character(x.sp2@metaData$barcode)
+x.sp2@metaData$barcode[1:25352] <- paste(x.sp2@metaData$barcode[1:25352], "FL_HSC", sep = "_") 
+x.sp2@barcode[1:25352] <- paste(x.sp2@barcode[1:25352], "FL_HSC", sep = "_") 
+
+x.sp2@metaData$barcode[25353:122083] <- paste(x.sp2@metaData$barcode[25353:122083], "ABM_CD41neg", sep = "_") 
+x.sp2@barcode[25353:122083] <- paste(x.sp2@barcode[25353:122083], "ABM_CD41neg", sep = "_")
+
+x.sp2@metaData$barcode[122084:222504] <- paste(x.sp2@metaData$barcode[122084:222504], "ABM_CD41pos", sep = "_") 
+x.sp2@barcode[122084:222504] <- paste(x.sp2@barcode[122084:222504], "ABM_CD41pos", sep = "_")
+
+x.sp2@metaData$barcode[222505:273067] <- paste(x.sp2@metaData$barcode[222505:273067], "ABM_MkP", sep = "_") 
+x.sp2@barcode[222505:273067] <- paste(x.sp2@barcode[222505:273067], "ABM_MkP", sep = "_")
+
+
+x.sp2 = x.sp2[which(x.sp2@barcode %in% barcodes.sel$barcode),]
+#Add the metadata from the selected barcodes.
+x.sp2@metaData = cbind(x.sp2@metaData, barcodes.sel[,2:max(ncol(barcodes.sel))]) 
+
+#Remove the cell identifier since this seem to cause problems when adding the matrix below..
+s <- str_split_fixed(x.sp2@barcode, "_",2)
+x.sp2@barcode <- s[,1]
+
+s <- str_split_fixed(x.sp2@metaData$barcode, "_",2)
+x.sp2@metaData$barcode <- s[,1]
+```
+
+```{r matrix_addition_binarization, echo=FALSE}
+#Add cell-by-bin matrix
+x.sp2 = addBmatToSnap(x.sp2, bin.size=5000,do.par = TRUE, num.cores=12)
+
+#Make matrix binary
+x.sp2 = makeBinary(x.sp2, mat="bmat")
+```
+
+```{r black_list_and_bin_coverage_filtering, echo=FALSE}
+#Bin filtering
+#Remove blacklist regions
+system("wget http://mitra.stanford.edu/kundaje/akundaje/release/blacklists/mm10-mouse/mm10.blacklist.bed.gz")
+library(GenomicRanges)
+black_list = read.table("mm10.blacklist.bed.gz")
+black_list.gr = GRanges(black_list[,1],  IRanges(black_list[,2], black_list[,3]))
+idy = queryHits(findOverlaps(x.sp2@feature, black_list.gr))
+if(length(idy) > 0){x.sp2 = x.sp2[,-idy, mat="bmat"]}
+
+#Filter for bin coverage
+bin.cov = log10(Matrix::colSums(x.sp2@bmat)+1)
+hist(bin.cov[bin.cov > 0], xlab="log10(bin cov)", main="log10(Bin Cov)", col="lightblue",  xlim=c(0, 5))
+bin.cutoff = quantile(bin.cov[bin.cov > 0], 0.95);
+idy = which(bin.cov <= bin.cutoff & bin.cov > 0);
+x.sp2 = x.sp2[, idy, mat="bmat"];
+```
+```{r snap_atac_clustering, echo=FALSE}
+# Dimensionality reduction
+x.sp2 = runDiffusionMaps(obj=x.sp2, input.mat="bmat", num.eigs=50)
+
+plotDimReductPW(obj=x.sp2, eigs.dims=1:50,point.size=0.3, point.color="grey", point.shape=19,point.alpha=0.6, down.sample=5000, pdf.file.name=NULL,  pdf.height=7, pdf.width=7)
+# A little tricky but choose the 10 first dimensions since that is a little blob shaped after.
+
+x.sp3 <- x.sp2
+#Graph based clusterning
+x.sp3 = runKNN(obj=x.sp3,eigs.dims=1:8,k=50) #We set it to 50 to make a more stringent clustering. More similar neigbours,
+x.sp3=runCluster(obj=x.sp3,tmp.folder=tempdir(),louvain.lib="R-igraph",seed.use=10);
+x.sp3@metaData$cluster = x.sp3@cluster
+  
+#Visualization
+x.sp3 = runViz(obj=x.sp3, tmp.folder=tempdir(),dims=2, eigs.dims=1:8, method="umap",seed.use=10)
+
+par(mfrow = c(2, 2))
+
+#Some cluster and qc-plotting.
+plotViz(obj=x.sp3,method="umap",  main="HSCvsMkP", point.color=x.sp3@sample,  point.size=0.2, point.shape=19, point.alpha=0.8, text.add=TRUE,text.size=1.5, text.color="black", text.halo.add=TRUE, text.halo.color="white",text.halo.width=0.2,legend.add=FALSE)
+  
+plotViz(obj=x.sp3,method="umap",  main="HSCvsMkP", point.color=x.sp3@cluster,  point.size=0.2, point.shape=19, point.alpha=0.8, text.add=TRUE,text.size=1.5, text.color="black", text.halo.add=TRUE, text.halo.color="white",text.halo.width=0.2,legend.add=FALSE)
+
+plotFeatureSingle( obj=x.sp3,feature.value=log(x.sp3@metaData[,"passed_filters"]+1,10), method="umap", main="10X HSC Read Depth",point.size=0.1, point.shape=19, quantiles=c(0.01, 0.99))
+
+plotFeatureSingle(obj=x.sp3, feature.value=x.sp3@metaData$peak_region_fragments / x.sp3@metaData$passed_filters,method="umap",  main="HSCvsMkP FRiP", point.size=0.1,  point.shape=19, quantiles=c(0.01, 0.99))
+```
+
+```{r mm10_annotation_and_gene_access_plotting, echo=FALSE}
+#Gene based annotation and plotting:
+
+system("wget http://renlab.sdsc.edu/r3fang/share/github/Mouse_Brain_10X/gencode.vM16.gene.bed");
+genes = read.table("gencode.vM16.gene.bed");
+genes.gr = GRanges(genes[,1],  IRanges(genes[,2], genes[,3]), name=genes[,4]
+  );
+marker.genes = c("Lin28b", "Gata1", "Spi1","Nfe2", "Cebpa","Itga2b", "Vwf", "Gp9", "Itgb3" )
+genes.sel.gr <- genes.gr[which(genes.gr$name %in% marker.genes)]
+# re-add the cell-by-bin matrix to the snap object;
+x.sp3 = addBmatToSnap(x.sp3);
+x.sp3 = createGmatFromMat(obj=x.sp3,  input.mat="bmat",genes=genes.sel.gr, do.par=TRUE, num.cores=24)
+# normalize the cell-by-gene matrix
+x.sp3 = scaleCountMatrix(obj=x.sp3, cov=x.sp3@metaData$passed_filters + 1,mat="gmat",method = "RPM")
+# smooth the cell-by-gene matrix
+x.sp3 = runMagic( obj=x.sp3,input.mat="gmat",step.size=3)
+par(mfrow = c(3, 3))
+
+#Plot the marker genes above.    
+for(i in 1:9){
+  
+    plotFeatureSingle( obj=x.sp3,feature.value=x.sp3@gmat[, marker.genes[i]], method="umap",  main=marker.genes[i], point.size=0.1,  point.shape=19, quantiles=c(0, 1) )
+  
+  }   
+ 
+```
+
+```{r re_clustering_no_MkP, echo=FALSE}
+#This is done so the MkP cluster will not drench the signal for some genes.
+########## Test to cluster the data without the MkPs
+which(x.sp3@sample != "ABM_MkP")
+x.sp3_no_MkP = x.sp3[1:5838, ];
+
+x.sp3_no_MkP <- addBmatToSnap(x.sp3_no_MkP)
+x.sp3_no_MkP = makeBinary(x.sp3_no_MkP, mat="bmat")
+x.sp3_no_MkP = runDiffusionMaps(obj=x.sp3_no_MkP, input.mat="bmat", num.eigs=50)
+
+plotDimReductPW(obj=x.sp3_no_MkP, eigs.dims=1:50,point.size=0.3, point.color="grey", point.shape=19,point.alpha=0.6, down.sample=5000, pdf.file.name=NULL,  pdf.height=7, pdf.width=7)
+# A little tricky but choose the 10 first dimensions since that is a little blob shaped after.
+
+#Graph based clusterning
+x.sp3_no_MkP = runKNN(obj=x.sp3_no_MkP,eigs.dims=1:6,k=50) #We set it to 50 to make a more stringent clustering. More similar neigbours,
+x.sp3_no_MkP=runCluster(obj=x.sp3_no_MkP,tmp.folder=tempdir(),louvain.lib="R-igraph",seed.use=10);
+x.sp3_no_MkP@metaData$cluster = x.sp3_no_MkP@cluster
+
+#Visualization
+x.sp3_no_MkP = runViz(obj=x.sp3_no_MkP, tmp.folder=tempdir(),dims=2, eigs.dims=1:6, method="umap",seed.use=10)
+
+par(mfrow = c(2, 2))
+
+#Some cluster and qc-plotting.
+plotViz(obj=x.sp3_no_MkP,method="umap",  main="HSCvsMkP", point.color=x.sp3_no_MkP@sample,  point.size=0.2, point.shape=19, point.alpha=0.8, text.add=TRUE,text.size=1.5, text.color="black", text.halo.add=TRUE, text.halo.color="white",text.halo.width=0.2,legend.add=FALSE)
+
+x.sp3_no_MkP = addBmatToSnap(x.sp3_no_MkP);
+x.sp3_no_MkP = createGmatFromMat(obj=x.sp3_no_MkP,  input.mat="bmat",genes=genes.sel.gr, do.par=TRUE, num.cores=24)
+# normalize the cell-by-gene matrix
+#x.sp3_no_MkP = scaleCountMatrix(obj=x.sp3_no_MkP, cov=x.sp3_no_MkP@metaData$passed_filters + 1,mat="gmat",method = "RPM")
+x.sp3_no_MkP = scaleCountMatrix(obj=x.sp3_no_MkP, cov=x.sp3_no_MkP@metaData$promoter_ratio   + 1,mat="gmat",method = "RPM")
+# smooth the cell-by-gene matrix
+x.sp3_no_MkP = runMagic( obj=x.sp3_no_MkP,input.mat="gmat",step.size=3)
+par(mfrow = c(3, 3))
+
+#Plot the marker genes above.    
+for(i in 1:9){
+  
+    plotFeatureSingle( obj=x.sp3_no_MkP,feature.value=x.sp3_no_MkP@gmat[, marker.genes[i]], method="umap",  main=marker.genes[i], point.size=0.1,  point.shape=19, quantiles=c(0, 1) )
+  
+  } 
+
+x.sp3_no_MkP <- test
+```
+
+```{r heretical_clustering, echo=FALSE}
+#Pool 
+# calculate the ensemble signals for each cluster
+ensemble.x.sp3 = lapply(split(seq(length(x.sp3@cluster)), x.sp3@cluster), function(x){SnapATAC::colMeans(x.sp3[x,], mat="bmat");})
+
+#cluster using 1-cor as distance  
+hc.x.sp3 = hclust(as.dist(1 - cor(t(do.call(rbind, ensemble.x.sp3)))), method="ward.D2")
+
+plotViz(
+    obj=x.sp3,
+    method="umap", 
+    main="HSC vs MkP Cluster",
+    point.color=x.sp3@cluster, 
+    point.size=0.2, 
+    point.shape=19, 
+    point.alpha=0.8, 
+    text.add=TRUE,
+    text.size=1.5,
+    text.color="black",
+    text.halo.add=TRUE,
+    text.halo.color="white",
+    text.halo.width=0.2,
+    down.sample=10000,
+    legend.add=FALSE
+    )
+
+plot(hc.x.sp3, hang=-1, xlab="")
+```
+
+
+
+```{r peak_calling_sample_based, echo=FALSE}
+
+#Work with sample and not cluster peaks for now.
+# assuming all .narrowPeak files in the current folder are generated from the clusters
+setwd("/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/diff_peak_from_bulk_atac/")
+peaks.names = system("ls | grep bed", intern=TRUE)
+peak.gr.ls = lapply(peaks.names, function(x){
+    peak.df = read.table(x)
+    GRanges(peak.df[,1], IRanges(peak.df[,2], peak.df[,3]))
+  })
+
+peak.gr = reduce(Reduce(c, peak.gr.ls));
+peak.gr
+
+#Create a cell-by-peak matrix
+library(GenomicRanges) #Step below is dependent on Genomic Ranges.
+rmPmatFromSnap(x.sp3.sample_peaks)
+x.sp3.bulkatac_diff_peaks = createPmat(x.sp3.sample_peaks, peak.gr,  do.par = TRUE, num.cores = 4)
+x.sp3.bulkatac_diff_peaks = makeBinary(x.sp3.bulkatac_diff_peaks, mat="pmat")
+
+```
+
+```{r pseudo_time_analysis, echo=FALSE}
+
+#Export as a Seurat object. Use same eigs dims as above. This does not work well because very little data is transfered to the seurat object. Can I create a single cell experiment-oject from the pmat and start there? 
+#Convert pmat to a matrix.
+
+peak.matrix <- as(object = x.sp3.sample_peaks@pmat, Class = 'matrix')
+peak.dataframe <- as.data.frame(t(peak.matrix))
+
+#assign column names corresponding to the cell barcodes.
+colnames(peak.dataframe) <- x.sp3.sample_peaks@sample
+
+#Assign rownames (they'll be lost), and a new column as a factor of the peaks in Cicero format.
+peaks.df <- as.data.frame(peak.gr)[,1:3] 
+rownames(peak.dataframe) <- paste0(peaks.df$seqnames,"_",peaks.df$start,"_",peaks.df$end)
+head(peak.dataframe)
+
+#Create a singlecellexperiment
+library(SingleCellExperiment)
+library(scater)
+sce <- SingleCellExperiment(assays = list(counts = as.matrix(peak.dataframe), logcounts = as.matrix(peak.dataframe)))
+sce$cell_type <- colnames(sce)
+sce$snap_cluster <- x.sp3.sample_peaks@cluster
+
+########################################################################################
+############### Plot how variability changes over the different peaks ##################
+########################################################################################
+
+peak.var <- apply(peak.dataframe,1,var)
+peak.var <- as.data.frame(peak.var)
+peak.var  <- peak.var[order(peak.var$peak.var, decreasing = T),]
+peak.var <- as.data.frame(peak.var)
+peak.var$counter <- 1:210808
+
+plot(peak.var$counter,peak.var$peak.var, type="l", col="black", lwd=2, xlab="Peak", ylab="Variance")
+abline(v=c(10000,20000), col=c("blue", "red"), lty=c(1,2), lwd=c(1, 3))
+########################################################################################
+########################################################################################
+########################################################################################
+
+#Run PCA with scater package.
+library(scater)
+sce <- runPCA(sce, ncomponents = 20, ntop = 10000)
+#Should I rerun this with 10000 peaks to match the 9000 in the NFE2 Gata1 peak list? The answer was yes.
+
+#Test to perform a UMAP reduction on the PCA from sce-
+sce2 <- sce
+sce2 <- SingleCellExperiment(assays = list(counts = t(as.matrix(sce@reducedDims$PCA)), logcounts = t(as.matrix(sce@reducedDims$PCA))))
+sce2<- runUMAP(sce2 )
+sce2 <-runDiffusionMap(sce2)
+sce2$cell_type <- x.sp3.bulkatac_diff_peaks@sample
+sce2$snap_cluster <- x.sp3.bulkatac_diff_peaks@cluster
+plotReducedDim(sce2, use_dimred = "UMAP", colour_by = "cell_type")
+plotReducedDim(sce2, use_dimred = "DiffusionMap", colour_by = "cell_type")
+
+#Plot the UMAP colored by cell type-
+plotReducedDim(sce, use_dimred = "PCA", colour_by = "cell_type")
+
+#Apply slingshot
+library(slingshot)
+#Both DiffusionMaps and PCA performs poorly.
+sce <- slingshot(sce, reducedDim = "UMAP", clusterLabels = c(rep("FL_HSC",2358), rep("CD41neg",2314), rep("CD41pos",1166), rep("MkP",2985)))
+sce2 <- slingshot(sce2, reducedDim = "UMAP", clusterLabels = c(rep("FL_HSC",2358), rep("CD41neg",2314), rep("CD41pos",1166), rep("MkP",2985)))
+library(ggplot2)
+library(ggbeeswarm)
+library(ggthemes)
+
+#Plot pseudotime vs cell-type and cluster.
+ggplot(as.data.frame(colData(sce2)), aes(x = sce2$slingPseudotime_1, y = cell_type, 
+                              colour = cell_type)) +
+    geom_quasirandom(groupOnX = FALSE) +
+    theme_classic() +
+    xlab("Slingshot pseudotime") + ylab("Timepoint") +
+    ggtitle("Cells ordered by Slingshot pseudotime bulk diff peaks")
+
+ggsave(filename = "slingshot_pseudotime_order_cell_type_bulk_diff_peaks.pdf", device = "pdf",path = "/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/diff_peak_from_bulk_atac/", units = c("cm"), width = 20, height = 15)
+
+ggplot(as.data.frame(colData(sce2)), aes(x = sce2$slingPseudotime_1, y = snap_cluster, 
+                              colour = snap_cluster)) +
+    geom_quasirandom(groupOnX = FALSE) +
+    theme_classic() +
+    xlab("Slingshot pseudotime") + ylab("Timepoint") +
+    ggtitle("Cells ordered by Slingshot pseudotime bulk diff peaks")
+
+ggsave(filename = "slingshot_pseudotime_order_snap_cluster_bulk_diff_peaks.pdf", device = "pdf",path = "/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/diff_peak_from_bulk_atac/", units = c("cm"), width = 20, height = 15)
+
+colors <- colorRampPalette(rev(brewer.pal(11,'Spectral')[-6]))(100)
+plotcol <- colors[cut(sce2$slingPseudotime_1, breaks=100)]
+plot(reducedDims(sce2)$UMAP, col = plotcol, pch=16, asp = 1)
+lines(SlingshotDataSet(sce2), lwd=2, col='black')
+
+#I may want to revisit the pseudotime analysis with a more refined peak list later.
+
+```
+
+```{r plot_clusters_in_cell_types, echo=FALSE}
+#Calculate clusters per cell type
+
+table(x.sp3.sample_peaks@cluster)
+
+sample.in.cluster <- cbind( as.data.frame( table(x.sp3.sample_peaks@cluster[which(x.sp3.sample_peaks@sample=="FL_HSC")])), as.data.frame( table(x.sp3.sample_peaks@cluster[which(x.sp3.sample_peaks@sample=="CD41neg")])), as.data.frame( table(x.sp3.sample_peaks@cluster[which(x.sp3.sample_peaks@sample=="CD41pos")])) , as.data.frame(( table(x.sp3.sample_peaks@cluster[which(x.sp3.sample_peaks@sample=="MkP")]))))
+sample.in.cluster <- sample.in.cluster[,c(2,4,6,8)]
+
+colnames(sample.in.cluster) <- c("FL_HSC","CD41neg", "CD41pos", "MkP")
+rownames(sample.in.cluster) <- c("cluster1","cluster2","cluster3","cluster4","cluster5","cluster6","cluster7","cluster8","cluster9","cluster10","cluster11")
+sample.in.cluster$cluster <- rownames(sample.in.cluster)
+
+
+library(ggplot2)
+library(reshape2)
+
+sample.in.cluster <- melt(sample.in.cluster, id.vars = "cluster")
+sample.in.cluster$cluster <- factor(sample.in.cluster$cluster, levels = c("cluster1","cluster2","cluster3","cluster4","cluster5","cluster6","cluster7","cluster8","cluster9","cluster10","cluster11"))
+
+ggplot(sample.in.cluster, aes(variable,value)) + geom_bar(position="fill", stat="identity", aes(fill = cluster)) + theme_bw()
+ggsave(filename = "snap_atac_clusters_per_sample.pdf", device = "pdf",path = "/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/Figures", units = c("cm"), width = 20, height = 15)
+
+ggplot(sample.in.cluster, aes(cluster,value)) + geom_bar(position="fill", stat="identity", aes(fill = variable)) + theme_bw() +  theme(axis.text.x=element_text(angle=45,hjust=1))
+ggsave(filename = "snap_atac_samples_per_cluster.pdf", device = "pdf",path = "/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/Figures", units = c("cm"), width = 20, height = 15)
+
+```
+
+
+```{r chromVAR_motif_discovery, echo=FALSE}
+library(SnapATAC)
+library(chromVAR);
+library(motifmatchr);
+library(SummarizedExperiment);
+library(BSgenome.Mmusculus.UCSC.mm10);
+
+
+x.sp3.bulkatac_diff_peaks = makeBinary(x.sp3.bulkatac_diff_peaks, "pmat");
+
+x.sp3.bulkatac_diff_peaks_mouse <- x.sp3.bulkatac_diff_peaks
+
+#To get a complete list. Run this against both mouse and human and combine them in some way.
+x.sp3.bulkatac_diff_peaks_mouse@mmat = runChromVAR(
+    obj=x.sp3.bulkatac_diff_peaks_mouse,
+    input.mat="pmat",
+    genome=BSgenome.Mmusculus.UCSC.mm10,
+    min.count=10,
+    species="Mus musculus"
+  );
+
+x.sp3.bulkatac_diff_peaks_human <- x.sp3.bulkatac_diff_peaks
+
+x.sp3.bulkatac_diff_peaks_human@mmat = runChromVAR(
+    obj=x.sp3.bulkatac_diff_peaks_human,
+    input.mat="pmat",
+    genome=BSgenome.Mmusculus.UCSC.mm10,
+    min.count=10,
+    species="Homo sapiens"
+  );
+
+#Combine the two mmats and remove the originals:
+x.sp3.sample_peaks_mmat_combined <- x.sp3.bulkatac_diff_peaks_mouse
+x.sp3.sample_peaks_mmat_combined@mmat <- cbind(x.sp3.bulkatac_diff_peaks_mouse@mmat,x.sp3.bulkatac_diff_peaks_human@mmat)
+rm(x.sp3.bulkatac_diff_peaks_mouse)
+rm(x.sp3.bulkatac_diff_peaks_human)
+
+#Get the names of the motifs
+colnames(x.sp3.sample_peaks_mmat_combined@mmat)
+
+plot_order_samples <- factor(c(rep(c('FL_HSC'), times=2358), rep(c('CD41neg'), times=2314), rep(c('CD41pos'), times=1166), rep(c('MkP'), times=2985)), levels=(c('FL_HSC', 'CD41neg', 'CD41pos', 'MkP')))
+
+plot_order_clusters <- c(rep(c(1), times=1488),rep(c(2), times=860),rep(c(3), times=885),rep(c(4), times=1284),rep(c(5), times=773),rep(c(6), times=391),rep(c(7), times=1337),rep(c(8), times=150),rep(c(9), times=242),rep(c(10), times=305),rep(c(11), times=1108), levels = c(1:11))
+
+motif_i = "MA0080.4_SPI1";
+dat = data.frame(x=plot_order_samples, y=x.sp3.sample_peaks_mmat_combined@mmat[,motif_i]);
+
+ggplot(dat, aes(x=x, y=y, fill=x)) + 
+	theme_classic() +
+	geom_violin(draw_quantiles = c(0.25, 0.5, 0.75)) + 
+	xlab("Sample") +
+	ylab("motif enrichment") + 
+	ggtitle(motif_i) +
+	theme(
+		  axis.text.x = element_text(angle = 90, hjust = 1),
+		  axis.ticks.x=element_blank(),
+		  legend.position = "none"
+   );
+
+#Loop over all the motifs in the file.
+for (i in 1:length(colnames(x.sp3.sample_peaks_mmat_combined@mmat)) ) {
+
+  motif_i = colnames(x.sp3.sample_peaks_mmat_combined@mmat)[i];
+  
+  dat = data.frame(x=plot_order_samples, y=x.sp3.sample_peaks_mmat_combined@mmat[,motif_i]);
+
+  ggplot(dat, aes(x=x, y=y, fill=x)) + 
+	  theme_classic() +
+	  geom_violin(draw_quantiles = c(0.25, 0.5, 0.75)) + 
+	  xlab("Sample") +
+	  ylab("motif enrichment") + 
+	  ggtitle(motif_i) +
+    theme(
+		  axis.text.x = element_text(angle = 90, hjust = 1),
+		  axis.ticks.x=element_blank(),
+		  legend.position = "none"
+   );
+
+  ggsave(filename = paste(motif_i,"_diff_peaks_bulk_chromVAR_enrichment_per_sample.pdf",sep = "."), device = "pdf", dpi = 150, units = c("cm"), width = 10, height = 9)
+}
+
+#Plot a heatmap of the motifs over pseudotime_
+pseudo.df <- cbind(as.data.frame(sce2$slingClusters), as.data.frame(sce2$slingPseudotime_1))
+colnames(pseudo.df)<-c("sample", "pseudotime")
+
+pseudotime_order <- pseudo.df[order(pseudo.df$pseudotime),]
+pseudotime_order$index <- as.numeric(rownames(pseudotime_order))
+pseudotime_order$cluster <- x.sp3.sample_peaks_mmat_combined@cluster[pseudotime_order$index]
+pseudotime_order$sample <- x.sp3.sample_peaks_mmat_combined@sample[pseudotime_order$index]
+#Bring out the motif_matrix
+motif_matrix <-as.data.frame(t(x.sp3.sample_peaks_mmat_combined@mmat))
+colnames(motif_matrix) <- 1:8823
+
+#Plot it with pheatmap.
+library(pheatmap)
+
+pheatmap(motif_matrix[,c(pseudotime_order$index)], cluster_cols = F ,annotation_col = pseudotime_order[,c(1:2,4)], show_rownames=F, show_colnames = F)
+
+#The motif matrix is a little big so take out the top 10% most varying motifs and ploit them
+motif_matrix$variance = apply(motif_matrix[,1:8823],1,var)
+
+motif_matrix <- motif_matrix[order(motif_matrix$variance, decreasing = T),]
+motif_matrix$counter <- 1:514
+motif_matrix_top100 <- subset(motif_matrix, motif_matrix$counter <= 100)
+motif_matrix_top100 <- motif_matrix_top100[,1:8823]
+
+
+#Plot top motifs as a heatmap along the pseudotime trajectory.
+ann_colors = list(sample=c("FL_HSC"="red","CD41neg"="blue","CD41pos"="green","MkP"="goldenrod1"))
+
+pheatmap(motif_matrix_top100[,c(pseudotime_order$index)], cluster_cols = F ,annotation_col = pseudotime_order[,c(1:2,4)], show_rownames=T, show_colnames = F,clustering_distance_rows = "correlation", clustering_method = "ward.D2", annotation_colors = ann_colors, scale = "column")
+
+
+#Plot some motifs over the umap
+colnames(x.sp3.sample_peaks_mmat_combined@mmat)[211]<-"MA0140.2_GATA1_TAL1"
+
+ plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0841.1_NFE2'], method="umap",  main='MA0841.1_NFE2', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8) )
+
+ plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0035.3_Gata1'], method="umap",  main='MA0035.3_Gata1', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8) )
+ 
+ plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0795.1_SMAD3'], method="umap",  main='MA0795.1_SMAD3', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8) )
+ 
+ plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0080.4_SPI1'], method="umap",  main='MA0080.4_SPI1', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8) )
+
+ plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0140.2_GATA1_TAL1'], method="umap",  main='MA0140.2_GATA1_TAL1', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8) )
+ 
+ plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0002.2_RUNX1'], method="umap",  main='MA0002.2_RUNX1', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8))
+ 
+  plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0594.1_Hoxa9'], method="umap",  main='MA0594.1_Hoxa9', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8))
+  
+   plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0102.3_CEBPA'], method="umap",  main='MA0102.3_CEBPA', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8))
+   
+    plotFeatureSingle( obj=x.sp3.sample_peaks_mmat_combined,feature.value=x.sp3.sample_peaks_mmat_combined@mmat[,'MA0139.1_CTCF'], method="umap",  main='MA0139.1_CTCF', point.size=0.1,  point.shape=19 , quantiles=c(0.2, 0.8))
+```
+
+
+```{r snap_atac_FL_test, echo=FALSE}
+#I did this to figure out what was the problem with the barcode matching above and it was the sample tag that first had to be added and then removed.
+FL.sp = createSnap(
+    file="/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/FL_HSC/FL_HSC.snap/FL_HSC.snap",
+    sample="FL_HSC",
+    num.cores=1
+  )
+
+FL_barcodes = read.csv("/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/cellranger_singlecell/FL_HSC_2000_cells.singlecell.csv",head=TRUE)
+FL_barcodes  <- FL_barcodes [2:nrow(FL_barcodes),]
+FL_barcodes$barcode <- as.character( FL_barcodes$barcode )
+s <- str_split_fixed(FL_barcodes$barcode, "-",2)
+FL_barcodes <- cbind(s[,1], FL_barcodes[,2:max(ncol(FL_barcodes))])
+colnames(FL_barcodes)[1] <-"barcode"
+FL_barcodes$barcode <- factor(FL_barcodes$barcode )
+FL_promoter_ratio = (FL_barcodes$promoter_region_fragments+1) / (FL_barcodes$passed_filters + 1);
+FL_UMI = log(FL_barcodes$passed_filters+1, 10);
+ data = data.frame(FL_UMI=FL_UMI, FL_promoter_ratio=FL_promoter_ratio);
+ FL_barcodes$promoter_ratio = FL_promoter_ratio;
+ p1 = ggplot( data,  aes(x= FL_UMI, y= FL_promoter_ratio)) +  geom_point(size=0.1, col="grey") + theme_classic() + ggtitle("FL_HSC") + ylim(0, 1) + xlim(0, 6) + labs(x = "log10(UMI)", y="promoter ratio")
+
+p1
+
+FL.barcodes.sel = FL_barcodes[which(FL_UMI >= 4 & FL_UMI <= 6 & FL_promoter_ratio >= 0.15 & FL_promoter_ratio <= 0.6),]
+rownames(FL.barcodes.sel) = FL.barcodes.sel$barcode
+FL.sp = FL.sp[which(FL.sp@barcode %in% FL.barcodes.sel$barcode),]
+FL.sp@metaData = FL.barcodes.sel[FL.sp@barcode,]
+
+FL.sp
+
+FL.sp = addBmatToSnap(FL.sp, bin.size=5000, num.cores=1)
+
+#This was accepted. Does that mean that my additions to the full file above is the problem?
+```
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+f
+
+

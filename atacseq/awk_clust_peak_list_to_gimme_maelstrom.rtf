@@ -1,0 +1,40 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1671\cocoasubrtf100
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fmodern\fcharset0 Courier;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww10800\viewh8400\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 #Onliner for clust to gimme maelstrom\
+\
+awk  'BEGIN \{FS="\\t"\} ; \{  print $2":"$3"-"$4"\\t"$20 \}' clust_FLvsABM_HSC_atac_opening_closing.txt > mealstromtest.txt\
+\
+\pard\pardeftab720\sl280\partightenfactor0
+
+\f1 \cf2 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 import pandas as pd\
+import seaborn as sns\
+import numpy as np\
+import matplotlib.pyplot as plt\
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0 \cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 \
+df = pd.read_table("final.out.csv", index_col=0)\
+
+\fs28 m2f = pd.read_table("gimme.vertebrate.v5.0.motif2factors.txt",index_col=0)
+\fs24 \
+m2f.Factor = m2f.Factor.str.slice(0,50)\
+df2 = df.join(m2f) \
+df3 = df2.groupby([df2.index,'C0','C1','C10','C11','C12','C13','C2','C3','C4','C5','C6','C7','C8','C9'])['Factor'].apply(list)\
+\
+df3 = df3[[\'94C0", "C1", "C10", "C11", "C12", "C13", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9"]]\
+\
+df2 = df[np.any(abs(df) >= 2, 1)]\
+cm = sns.clustermap(df2, figsize=(8,14), cmap= "coolwarm", z_score=0)\
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+\cf0 cm = sns.clustermap(df, figsize=(8,14), cmap= "coolwarm", z_scodre=0)\
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+\cf0 cm.fig.subplots_adjust(right=0.5)\
+plt.setp(cm.ax_heatmap.yaxis.get_majorticklabels(), rotation=0);\
+plt.setp(cm.ax_heatmap.xaxis.get_majorticklabels(), rotation=45);\
+plt.savefig("heatmap.pdf\'94)}

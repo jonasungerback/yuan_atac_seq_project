@@ -1,0 +1,489 @@
+---
+title: "HSC_Fludidigm_Trine"
+author: "Jonas Ungerbäck"
+date: "6/14/2019"
+output: html_document
+---
+
+```{r read_preprocess_data, include=FALSE}
+hsc_fluidigm_plate <- read.delim("#366TK_all_fluidigm_for_R.txt", stringsAsFactors = F)
+
+
+hsc_fluidigm_plate_10_cells <- subset(hsc_fluidigm_plate, hsc_fluidigm_plate$cell.number == "10")
+
+hsc_fluidigm_plate_1_cells <- subset(hsc_fluidigm_plate, hsc_fluidigm_plate$cell.number == "1")
+```
+```{r 10_cell, include=FALSE}
+
+#Each sample os in a technical triplicate that I have to aggregate.
+hsc_fluidigm_plate_10_cells$ID <-paste(hsc_fluidigm_plate_10_cells$sample,hsc_fluidigm_plate_10_cells$gene, sep = "_")
+hsc_fluidigm_plate_10_cells <- hsc_fluidigm_plate_10_cells[,c(1,9,2:8)]
+hsc_fluidigm_plate_10_cells$ct[hsc_fluidigm_plate_10_cells$ct == 999] <- NA
+
+technical_mean <- aggregate(hsc_fluidigm_plate_10_cells[,8], list(hsc_fluidigm_plate_10_cells$ID), mean, na.rm = T)
+colnames(technical_mean)  <- c("ID","Ct_mean")
+hsc_fluidigm_plate_10_cells_mean <- hsc_fluidigm_plate_10_cells[,-8]
+hsc_fluidigm_plate_10_cells_mean <- merge(technical_mean, hsc_fluidigm_plate_10_cells_mean, by = "ID", all.x = T)
+hsc_fluidigm_plate_10_cells_mean <- hsc_fluidigm_plate_10_cells_mean[!duplicated(hsc_fluidigm_plate_10_cells_mean$ID),]
+
+hsc_fluidigm_plate_10_cells_mean <- subset(hsc_fluidigm_plate_10_cells_mean, hsc_fluidigm_plate_10_cells_mean$sample != "10c_no_RT")
+library(reshape2)
+data_wide_hsc_fluidigm_plate_10_cells <- dcast(hsc_fluidigm_plate_10_cells_mean, cell.type + sample ~ gene, value.var="Ct_mean")
+#Remove 10c_no_RT
+hprt_10 <- data_wide_hsc_fluidigm_plate_10_cells[,'Hprt']
+#Write a function that calculates dCT
+deltaCT10 <- data_wide_hsc_fluidigm_plate_10_cells[,3:98]-hprt_10
+
+deltaCT10 <- cbind(data_wide_hsc_fluidigm_plate_10_cells[,1:2],deltaCT10)
+#Turn back to long format so I can plot.
+
+long_format <- melt(deltaCT10, id.vars=c("cell.type", "sample"))
+#Replace Nan with 0
+long_format$value[is.nan(long_format$value)] <- 0
+library(ggplot2)
+ggplot(subset(long_format, long_format$variable == "Lin28b" | long_format$variable == "Itga2b"| long_format$variable == "Actb")) + geom_boxplot( aes(y = -1*value,x = variable, fill=cell.type) )+theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#Change the levels to put FL first
+long_format$cell.type <- factor(long_format$cell.type, levels = unique( long_format$cell.type[order(long_format$cell.type, decreasing = T)] ))
+
+
+ggplot(subset(long_format, long_format$variable == "Lin28b" | long_format$variable == "Itga2b"|long_format$variable == "Nfe2"|long_format$variable == "Pf4"|long_format$variable == "Itg23b"|long_format$variable == "Fgd5"| long_format$variable == "Actb"| long_format$variable == "Gata1"| long_format$variable == "Actb"| long_format$variable == "Gata2"), aes(x = factor(variable), fill = cell.type, y = -1*value)) + geom_dotplot(binaxis = "y", stackdir = "center", position = "dodge") + scale_fill_manual(values = c("red", "blue")) + theme_bw()
+
+#Can I redo this wothout collapsing ????????????
+test <- subset(hsc_fluidigm_plate_10_cells, hsc_fluidigm_plate_10_cells$sample != "10c_no_RT")
+test$ct[is.na(test$ct)] <- NaN
+hsc_fluidigm_plate_10_cells_wide <- dcast(test, cell.type + sample ~ gene, value.var="ct")
+
+```
+
+```{r 1_cell, include=FALSE}
+hsc_fluidigm_plate_1_cell_for_plot <- hsc_fluidigm_plate_1_cells
+hsc_fluidigm_plate_1_cell_for_plot$ct[hsc_fluidigm_plate_1_cell_for_plot$ct == 999] <- NA
+hsc_fluidigm_plate_1_cell_for_plot$inv_ct <- 1/hsc_fluidigm_plate_1_cell_for_plot$ct
+hsc_fluidigm_plate_1_cell_for_plot$inv_ct[is.na(hsc_fluidigm_plate_1_cell_for_plot$inv_ct)] <- 0
+
+hsc_fluidigm_plate_1_cell_for_plot$cell.type <- factor(hsc_fluidigm_plate_1_cell_for_plot$cell.type, levels = unique( hsc_fluidigm_plate_1_cell_for_plot$cell.type[order(hsc_fluidigm_plate_1_cell_for_plot$cell.type, decreasing = T)] ))
+
+hsc_fluidigm_plate_1_cell_for_plot_ordered <- subset(hsc_fluidigm_plate_1_cell_for_plot, hsc_fluidigm_plate_1_cell_for_plot$gene == "Lin28b" | hsc_fluidigm_plate_1_cell_for_plot$gene == "Itga2b"|hsc_fluidigm_plate_1_cell_for_plot$gene == "Nfe2"|hsc_fluidigm_plate_1_cell_for_plot$gene == "Pf4"|hsc_fluidigm_plate_1_cell_for_plot$gene == "Itg23b"|hsc_fluidigm_plate_1_cell_for_plot$gene == "Fgd5"| hsc_fluidigm_plate_1_cell_for_plot$gene == "Actb"| hsc_fluidigm_plate_1_cell_for_plot$gene == "Gata1"| hsc_fluidigm_plate_1_cell_for_plot$gene == "Gata2"| hsc_fluidigm_plate_1_cell_for_plot$gene == "Hprt"| hsc_fluidigm_plate_1_cell_for_plot$gene == "Clu"| hsc_fluidigm_plate_1_cell_for_plot$gene == "Pu1")
+
+hsc_fluidigm_plate_1_cell_for_plot_ordered$gene <- as.factor(hsc_fluidigm_plate_1_cell_for_plot_ordered$gene)
+
+# Reorder following a precise order
+library(dplyr)
+library(forcats)
+hsc_fluidigm_plate_1_cell_for_plot_ordered<- hsc_fluidigm_plate_1_cell_for_plot_ordered %>% mutate(gene = fct_relevel(gene, "Actb","Hprt","Lin28b","Fgd5", "Pu1","Gata1","Gata2","Nfe2","Pf4","Itga2b","Clu")) 
+
+library(ggplot2)
+hsc_fluidigm_plate_1_cell_dotplot_ordered <- ggplot(hsc_fluidigm_plate_1_cell_for_plot_ordered, aes(x = gene, fill = cell.type, y = inv_ct)) + geom_dotplot(binaxis = "y", stackdir = "center", position = "dodge", binwidth = 0.001, dotsize = 2) + stat_summary(fun.y=mean, geom="point", aes(group=cell.type), position=position_dodge(.9),  size=10) + scale_fill_manual(values = c("red", "blue")) +  theme_bw()
+
+
+ggsave(plot = hsc_fluidigm_plate_1_cell_dotplot_ordered, filename = "poster_genes.svg", width = 12, height = 8,  dpi = 300)  
+```
+
+```{r 1_cell_for_heatmap, include=FALSE}
+for_hm_hsc_fluidigm_plate_1_cell <- read.delim("#366TK_single cell_Ct values.txt", stringsAsFactors = F)
+for_hm_hsc_fluidigm_plate_1_cell <- for_hm_hsc_fluidigm_plate_1_cell[,1:82]
+# Create a vector with FL and BMs
+FL_BM_vec <- c( rep(c("FL"), times = 42),rep(c("BM"), times = 39))
+#Invert the Ct-values
+for_hm_hsc_fluidigm_plate_1_cell[,2:82] <- 1/for_hm_hsc_fluidigm_plate_1_cell[,2:82]
+
+#Random forest
+rownames(for_hm_hsc_fluidigm_plate_1_cell)<-for_hm_hsc_fluidigm_plate_1_cell$Gene
+for_hm_hsc_fluidigm_plate_1_cell <- for_hm_hsc_fluidigm_plate_1_cell[,2:82]
+
+ann_col <- as.data.frame(cbind(FL_BM_vec, FL_BM_vec))
+rownames(ann_col)<-colnames(for_hm_hsc_fluidigm_plate_1_cell)
+
+
+
+for_hm_hsc_fluidigm_plate_1_cell[is.na(for_hm_hsc_fluidigm_plate_1_cell)] <- 0
+library(randomForest)
+hr <- randomForest(x = for_hm_hsc_fluidigm_plate_1_cell, y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hc <- randomForest(x = t( for_hm_hsc_fluidigm_plate_1_cell ), y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hr <- hclust(as.dist(1-hr$proximity), method = "ward.D2")
+hc <- hclust(as.dist(1-hc$proximity), method = "ward.D2")
+
+#Turn 0 into NA
+for_hm_hsc_fluidigm_plate_1_cell[for_hm_hsc_fluidigm_plate_1_cell== 0] <- NA
+#Reorder the data according to the clustering:
+for_hm_hsc_fluidigm_plate_1_cell <- for_hm_hsc_fluidigm_plate_1_cell[hr$order,hc$order]
+
+library(pheatmap)
+ann_colors = list(FL_BM_vec=c("FL"="red","BM"="blue"),FL_BM_vec.1=c("FL"="red","BM"="blue"))
+breakList <- seq(-2, 2, by = 0.01)
+library(RColorBrewer)
+pheatmap(mat = for_hm_hsc_fluidigm_plate_1_cell,  cluster_rows = F, cluster_cols = F,  show_rownames = T, show_colnames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdYlBu")))(length(breakList)), breaks = breakList, annotation_col = ann_col[,1:2], annotation_colors = ann_colors,  na_col = "grey", scale = "row")
+
+#z-score normalize
+library(preprocessCore)
+#Include quantile norm
+#Quant-norm
+z_score_for_hm_hsc_fluidigm_plate_1_cell <- t( apply( normalize.quantiles(as.matrix( for_hm_hsc_fluidigm_plate_1_cell) ) ,1,scale))
+#No quant-norm
+z_score_for_hm_hsc_fluidigm_plate_1_cell <- t( apply(  for_hm_hsc_fluidigm_plate_1_cell ,1,scale))
+
+colnames(z_score_for_hm_hsc_fluidigm_plate_1_cell) <- colnames(for_hm_hsc_fluidigm_plate_1_cell)
+rownames(z_score_for_hm_hsc_fluidigm_plate_1_cell) <- rownames(for_hm_hsc_fluidigm_plate_1_cell)
+
+z_score_for_hm_hsc_fluidigm_plate_1_cell[is.na(z_score_for_hm_hsc_fluidigm_plate_1_cell)] <- -20
+library(randomForest)
+hr <- randomForest(x = z_score_for_hm_hsc_fluidigm_plate_1_cell, y = NULL, ntree = 100000, proximity = TRUE, oob.prox = TRUE)
+hc <- randomForest(x = t( z_score_for_hm_hsc_fluidigm_plate_1_cell ), y = NULL, ntree = 100000, proximity = TRUE, oob.prox = TRUE)
+hr <- hclust(as.dist(1-hr$proximity), method = "ward.D2")
+hc <- hclust(as.dist(1-hc$proximity), method = "ward.D2")
+
+#Turn 0 into NA
+z_score_for_hm_hsc_fluidigm_plate_1_cell[z_score_for_hm_hsc_fluidigm_plate_1_cell== -20] <- NA
+#Reorder the data according to the clustering:
+z_score_for_hm_hsc_fluidigm_plate_1_cell <- z_score_for_hm_hsc_fluidigm_plate_1_cell[hr$order,hc$order]
+
+library(pheatmap)
+ann_colors = list(FL_BM_vec=c("FL"="red","BM"="blue"),FL_BM_vec.1=c("FL"="red","BM"="blue"))
+breakList <- seq(-1, 1, by = 0.01)
+library(RColorBrewer)
+pheatmap(mat = z_score_for_hm_hsc_fluidigm_plate_1_cell,  cluster_rows = F, cluster_cols = F,  show_rownames = T, show_colnames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdYlBu")))(length(breakList)), breaks = breakList, annotation_col = ann_col[,1:2], annotation_colors = ann_colors,  na_col = "grey")
+
+```
+
+
+```{r 1_cell_for_heatmap_selected_genes, include=FALSE}
+for_hm_hsc_fluidigm_plate_1_cell <- read.delim("#366TK_single cell_Ct values.txt", stringsAsFactors = F)
+for_hm_hsc_fluidigm_plate_1_cell <- for_hm_hsc_fluidigm_plate_1_cell[,1:82]
+# Create a vector with FL and BMs
+FL_BM_vec <- c( rep(c("FL"), times = 42),rep(c("BM"), times = 39))
+#Invert the Ct-values
+selected_genes_hm <- read.delim("selected_genelist_heatmap_fluidigm_poster.txt", stringsAsFactors = F)
+selected_genes_hm <- as.data.frame(selected_genes_hm[,1])
+colnames(selected_genes_hm)[1]<-"Gene"
+for_hm_hsc_fluidigm_plate_1_cell <- merge(for_hm_hsc_fluidigm_plate_1_cell, selected_genes_hm, by = "Gene", all.y = T)
+
+for_hm_hsc_fluidigm_plate_1_cell[,2:82] <- 1/for_hm_hsc_fluidigm_plate_1_cell[,2:82]
+
+#Random forest
+rownames(for_hm_hsc_fluidigm_plate_1_cell)<-for_hm_hsc_fluidigm_plate_1_cell$Gene
+for_hm_hsc_fluidigm_plate_1_cell <- for_hm_hsc_fluidigm_plate_1_cell[,2:82]
+
+ann_col <- as.data.frame(cbind(FL_BM_vec, FL_BM_vec))
+rownames(ann_col)<-colnames(for_hm_hsc_fluidigm_plate_1_cell)
+
+test <- for_hm_hsc_fluidigm_plate_1_cell
+test[is.na(test)] <- -20
+#z-score normalize
+
+z_score_for_hm_hsc_fluidigm_plate_1_cell <- t( apply(  for_hm_hsc_fluidigm_plate_1_cell ,1,scale))
+
+colnames(z_score_for_hm_hsc_fluidigm_plate_1_cell) <- colnames(for_hm_hsc_fluidigm_plate_1_cell)
+rownames(z_score_for_hm_hsc_fluidigm_plate_1_cell) <- rownames(for_hm_hsc_fluidigm_plate_1_cell)
+
+z_score_for_hm_hsc_fluidigm_plate_1_cell[is.na(z_score_for_hm_hsc_fluidigm_plate_1_cell)] <- -20
+library(randomForest)
+hr <- randomForest(x = z_score_for_hm_hsc_fluidigm_plate_1_cell, y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hc <- randomForest(x = t( z_score_for_hm_hsc_fluidigm_plate_1_cell ), y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hr <- hclust(as.dist(1-hr$proximity), method = "ward.D2")
+hc <- hclust(as.dist(1-hc$proximity), method = "ward.D2")
+
+#Turn 0 into NA
+z_score_for_hm_hsc_fluidigm_plate_1_cell[z_score_for_hm_hsc_fluidigm_plate_1_cell== -20] <- NA
+#Reorder the data according to the clustering:
+z_score_for_hm_hsc_fluidigm_plate_1_cell <- z_score_for_hm_hsc_fluidigm_plate_1_cell[hr$order,hc$order]
+
+library(pheatmap)
+ann_colors = list(FL_BM_vec=c("FL"="red","BM"="blue"),FL_BM_vec.1=c("FL"="red","BM"="blue"))
+breakList <- seq(-1, 1, by = 0.01)
+library(RColorBrewer)
+pheatmap(mat = z_score_for_hm_hsc_fluidigm_plate_1_cell,  cluster_rows = F, cluster_cols = F,  show_rownames = T, show_colnames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdYlBu")))(length(breakList)), breaks = breakList, annotation_col = ann_col[,1:2], annotation_colors = ann_colors,  na_col = "grey")
+
+```
+
+
+
+```{r 1_cell_for_heatmap, include=FALSE}
+for_hm_hsc_fluidigm_plate_1_cell <- read.delim("#366TK_single cell_Ct values.txt", stringsAsFactors = F)
+for_hm_hsc_fluidigm_plate_1_cell <- for_hm_hsc_fluidigm_plate_1_cell[,1:82]
+# Create a vector with FL and BMs
+FL_BM_vec <- c( rep(c("FL"), times = 42),rep(c("BM"), times = 39))
+#Invert the Ct-values
+for_hm_hsc_fluidigm_plate_1_cell[,2:82] <- 1/for_hm_hsc_fluidigm_plate_1_cell[,2:82]
+
+#Random forest
+rownames(for_hm_hsc_fluidigm_plate_1_cell)<-for_hm_hsc_fluidigm_plate_1_cell$Gene
+for_hm_hsc_fluidigm_plate_1_cell <- for_hm_hsc_fluidigm_plate_1_cell[,2:82]
+
+ann_col <- as.data.frame(cbind(FL_BM_vec, FL_BM_vec))
+rownames(ann_col)<-colnames(for_hm_hsc_fluidigm_plate_1_cell)
+
+
+
+for_hm_hsc_fluidigm_plate_1_cell[is.na(for_hm_hsc_fluidigm_plate_1_cell)] <- 0
+library(randomForest)
+hr <- randomForest(x = for_hm_hsc_fluidigm_plate_1_cell, y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hc <- randomForest(x = t( for_hm_hsc_fluidigm_plate_1_cell ), y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hr <- hclust(as.dist(1-hr$proximity), method = "ward.D2")
+hc <- hclust(as.dist(1-hc$proximity), method = "ward.D2")
+
+#Turn 0 into NA
+for_hm_hsc_fluidigm_plate_1_cell[for_hm_hsc_fluidigm_plate_1_cell== 0] <- NA
+#Reorder the data according to the clustering:
+for_hm_hsc_fluidigm_plate_1_cell <- for_hm_hsc_fluidigm_plate_1_cell[hr$order,hc$order]
+
+library(pheatmap)
+ann_colors = list(FL_BM_vec=c("FL"="red","BM"="blue"),FL_BM_vec.1=c("FL"="red","BM"="blue"))
+breakList <- seq(-2, 2, by = 0.01)
+library(RColorBrewer)
+pheatmap(mat = for_hm_hsc_fluidigm_plate_1_cell,  cluster_rows = F, cluster_cols = F,  show_rownames = T, show_colnames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdYlBu")))(length(breakList)), breaks = breakList, annotation_col = ann_col[,1:2], annotation_colors = ann_colors,  na_col = "grey", scale = "row")
+
+#z-score normalize
+library(preprocessCore)
+#Include quantile norm
+#Quant-norm
+z_score_for_hm_hsc_fluidigm_plate_1_cell <- t( apply( normalize.quantiles(as.matrix( for_hm_hsc_fluidigm_plate_1_cell) ) ,1,scale))
+#No quant-norm
+z_score_for_hm_hsc_fluidigm_plate_1_cell <- t( apply(  for_hm_hsc_fluidigm_plate_1_cell ,1,scale))
+
+colnames(z_score_for_hm_hsc_fluidigm_plate_1_cell) <- colnames(for_hm_hsc_fluidigm_plate_1_cell)
+rownames(z_score_for_hm_hsc_fluidigm_plate_1_cell) <- rownames(for_hm_hsc_fluidigm_plate_1_cell)
+
+z_score_for_hm_hsc_fluidigm_plate_1_cell[is.na(z_score_for_hm_hsc_fluidigm_plate_1_cell)] <- -20
+library(randomForest)
+hr <- randomForest(x = z_score_for_hm_hsc_fluidigm_plate_1_cell, y = NULL, ntree = 100000, proximity = TRUE, oob.prox = TRUE)
+hc <- randomForest(x = t( z_score_for_hm_hsc_fluidigm_plate_1_cell ), y = NULL, ntree = 100000, proximity = TRUE, oob.prox = TRUE)
+hr <- hclust(as.dist(1-hr$proximity), method = "ward.D2")
+hc <- hclust(as.dist(1-hc$proximity), method = "ward.D2")
+
+#Turn 0 into NA
+z_score_for_hm_hsc_fluidigm_plate_1_cell[z_score_for_hm_hsc_fluidigm_plate_1_cell== -20] <- NA
+#Reorder the data according to the clustering:
+z_score_for_hm_hsc_fluidigm_plate_1_cell <- z_score_for_hm_hsc_fluidigm_plate_1_cell[hr$order,hc$order]
+
+library(pheatmap)
+ann_colors = list(FL_BM_vec=c("FL"="red","BM"="blue"),FL_BM_vec.1=c("FL"="red","BM"="blue"))
+breakList <- seq(-1, 1, by = 0.01)
+library(RColorBrewer)
+pheatmap(mat = z_score_for_hm_hsc_fluidigm_plate_1_cell,  cluster_rows = F, cluster_cols = F,  show_rownames = T, show_colnames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdYlBu")))(length(breakList)), breaks = breakList, annotation_col = ann_col[,1:2], annotation_colors = ann_colors,  na_col = "grey")
+
+```
+
+
+```{r ABM_poly_IC_1_cell_for_heatmap_selected_genes, include=FALSE}
+polyIC_fluidigm_plate_1_cell <- read.delim("polyIC_fluidigm/#377TK_heatmap_sc_values.txt", stringsAsFactors = F)
+qc_polyIC_fluidigm_plate_1_cell <- read.delim("polyIC_fluidigm/#377TK_heatmap_sc_qc.txt", stringsAsFactors = F)
+################### data massaging ######################
+# Turn all fail in the qc to 999 if there are others in the plate
+polyIC_fluidigm_plate_1_cell <- replace(polyIC_fluidigm_plate_1_cell, qc_polyIC_fluidigm_plate_1_cell == "Fail", NA) 
+
+polyIC_fluidigm_plate_1_cell <- replace(polyIC_fluidigm_plate_1_cell, polyIC_fluidigm_plate_1_cell == 999, NA) 
+pIC_sample_type <- as.data.frame( cbind(polyIC_fluidigm_plate_1_cell$sample_cat,polyIC_fluidigm_plate_1_cell$sample_cat) )
+
+
+rownames(polyIC_fluidigm_plate_1_cell) <- polyIC_fluidigm_plate_1_cell$sample_nr
+rownames(pIC_sample_type) <- polyIC_fluidigm_plate_1_cell$sample_nr
+
+polyIC_fluidigm_plate_1_cell <- polyIC_fluidigm_plate_1_cell[,c(4:99) ]
+
+
+#Transpose
+polyIC_fluidigm_plate_1_cell <- t(polyIC_fluidigm_plate_1_cell)
+back_up <- polyIC_fluidigm_plate_1_cell
+polyIC_fluidigm_plate_1_cell <- as.data.frame(polyIC_fluidigm_plate_1_cell)
+
+#Invert the Ct-values
+selected_genes_hm <- read.delim("selected_genelist_heatmap_fluidigm_poster.txt", stringsAsFactors = F)
+selected_genes_hm <- as.data.frame(selected_genes_hm[,1])
+colnames(selected_genes_hm)[1]<-"Gene"
+polyIC_fluidigm_plate_1_cell$Gene <- rownames(polyIC_fluidigm_plate_1_cell)
+
+polyIC_fluidigm_plate_1_cell <- merge(polyIC_fluidigm_plate_1_cell, selected_genes_hm, by = "Gene", all.y = T)
+
+polyIC_fluidigm_plate_1_cell[,2:65] <- 1/polyIC_fluidigm_plate_1_cell[,2:65]
+
+#Random forest
+rownames(polyIC_fluidigm_plate_1_cell)<-polyIC_fluidigm_plate_1_cell$Gene
+polyIC_fluidigm_plate_1_cell <- polyIC_fluidigm_plate_1_cell[,2:65]
+
+ann_col_2 <- pIC_sample_type 
+
+#z-score normalize
+
+z_score_polyIC_fluidigm_plate_1_cell <- t( apply(  polyIC_fluidigm_plate_1_cell ,1,scale))
+#Since there is only one value for Lin28b this turns to NaN. Replace with 1.
+z_score_polyIC_fluidigm_plate_1_cell[is.nan(z_score_polyIC_fluidigm_plate_1_cell)] <- 1
+
+colnames(z_score_polyIC_fluidigm_plate_1_cell) <- colnames(polyIC_fluidigm_plate_1_cell)
+rownames(z_score_polyIC_fluidigm_plate_1_cell) <- rownames(polyIC_fluidigm_plate_1_cell)
+
+z_score_polyIC_fluidigm_plate_1_cell[is.na(z_score_polyIC_fluidigm_plate_1_cell)] <- -20
+library(randomForest)
+hr <- randomForest(x = z_score_polyIC_fluidigm_plate_1_cell, y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hc <- randomForest(x = t( z_score_polyIC_fluidigm_plate_1_cell ), y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hr <- hclust(as.dist(1-hr$proximity), method = "ward.D2")
+hc <- hclust(as.dist(1-hc$proximity), method = "ward.D2")
+
+#Turn -20 into NA
+z_score_polyIC_fluidigm_plate_1_cell[z_score_polyIC_fluidigm_plate_1_cell== -20] <- NA
+#Reorder the data according to the clustering:
+z_score_polyIC_fluidigm_plate_1_cell <- z_score_polyIC_fluidigm_plate_1_cell[hr$order,hc$order]
+
+library(pheatmap)
+ann_colors_2 = list(V1=c("pIC"="cyan","PBS"="hotpink"),V2=c("pIC"="cyan","PBS"="hotpink"))
+breakList <- seq(-1, 1, by = 0.01)
+library(RColorBrewer)
+pheatmap(mat = z_score_polyIC_fluidigm_plate_1_cell,  cluster_rows = F, cluster_cols = F,  show_rownames = T, show_colnames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdYlBu")))(length(breakList)), breaks = breakList, annotation_col = pIC_sample_type[,1:2], annotation_colors = ann_colors_2,  na_col = "grey")
+
+```
+
+```{r ABM_poly_IC_1_cell_violin, include=FALSE}
+polyIC_fluidigm_plate_1_cell 
+
+
+hsc_fluidigm_plate_1_cell_for_plot$cell.type <- factor(hsc_fluidigm_plate_1_cell_for_plot$cell.type, levels = unique( hsc_fluidigm_plate_1_cell_for_plot$cell.type[order(hsc_fluidigm_plate_1_cell_for_plot$cell.type, decreasing = T)] ))
+
+polyIC_fluidigm_plate_1_cell_for_plot <- subset(polyIC_fluidigm_plate_1_cell , rownames(polyIC_fluidigm_plate_1_cell) == "Lin28b" |rownames(polyIC_fluidigm_plate_1_cell) == "Itga2b"|rownames(polyIC_fluidigm_plate_1_cell) == "Nfe2"|rownames(polyIC_fluidigm_plate_1_cell) == "Pf4"|rownames(polyIC_fluidigm_plate_1_cell) == "Itg23b"|rownames(polyIC_fluidigm_plate_1_cell) == "Fgd5"| rownames(polyIC_fluidigm_plate_1_cell) == "Actb"| rownames(polyIC_fluidigm_plate_1_cell) == "Gata1"| rownames(polyIC_fluidigm_plate_1_cell) == "Gata2"| rownames(polyIC_fluidigm_plate_1_cell) == "Hprt"|rownames(polyIC_fluidigm_plate_1_cell) == "Clu"| rownames(polyIC_fluidigm_plate_1_cell) == "Pu1"| rownames(polyIC_fluidigm_plate_1_cell) == "Tbxas1")
+
+polyIC_fluidigm_plate_1_cell_for_plot <- t(polyIC_fluidigm_plate_1_cell_for_plot)
+polyIC_fluidigm_plate_1_cell_for_plot <- cbind(polyIC_fluidigm_plate_1_cell_for_plot,as.data.frame(pIC_sample_type$V1))
+colnames(polyIC_fluidigm_plate_1_cell_for_plot)[13] <- "sample_type"
+library(reshape2)
+#Turn to long-format
+long_format <- melt(polyIC_fluidigm_plate_1_cell_for_plot, id.vars=c( "sample_type"))
+long_format [is.na(long_format )] <- 0
+
+hsc_fluidigm_plate_1_cell_for_plot_ordered$gene <- as.factor(hsc_fluidigm_plate_1_cell_for_plot_ordered$gene)
+
+# Reorder following a precise order
+library(dplyr)
+library(forcats)
+hsc_fluidigm_plate_1_cell_for_plot_ordered<- hsc_fluidigm_plate_1_cell_for_plot_ordered %>% mutate(gene = fct_relevel(gene, "Actb","Hprt","Lin28b","Fgd5", "Pu1","Gata1","Gata2","Nfe2","Pf4","Itga2b","Clu")) 
+
+library(ggplot2)
+ggplot(long_format, aes(x = variable, fill = sample_type, y = value)) + geom_dotplot(binaxis = "y", stackdir = "center", position = "dodge", binwidth = 0.001, dotsize = 2) + stat_summary(fun.y=mean, geom="point", aes(sample_type), position=position_dodge(.9),  size=10) + scale_fill_manual(values = c("hotpink", "cyan")) +  theme_bw()
+
+ggplot(long_format, aes(x = variable, fill = sample_type, y = value)) + geom_dotplot(binaxis = "y", stackdir = "center", position = "dodge", binwidth = 0.001, dotsize = 2) +  scale_fill_manual(values = c("hotpink", "cyan")) +  theme_bw()
+```
+
+```{r ABM_poly_IC_10_cell_for_heatmap_selected_genes_hprt_norm, include=FALSE}
+polyIC_fluidigm_plate_10_cell <- read.delim("polyIC_fluidigm/#377TK_heatmap_10c_values.txt", stringsAsFactors = F)
+
+################### data massaging ######################
+# Turn all fail in the qc to 999 if there are others in the plate
+
+polyIC_fluidigm_plate_10_cell <- replace(polyIC_fluidigm_plate_10_cell, polyIC_fluidigm_plate_10_cell == 999, NA) 
+bulk_pIC_sample_type <- as.data.frame( cbind(polyIC_fluidigm_plate_10_cell$treatment,polyIC_fluidigm_plate_10_cell$cell_type) )
+colnames(bulk_pIC_sample_type)<-c("treatment","cell_type")
+
+rownames(polyIC_fluidigm_plate_10_cell) <- polyIC_fluidigm_plate_10_cell$sample_nr
+rownames(bulk_pIC_sample_type) <- polyIC_fluidigm_plate_10_cell$sample_nr
+
+polyIC_fluidigm_plate_10_cell <- polyIC_fluidigm_plate_10_cell[,c(5:100) ]
+
+#Normalize to Hprt
+hprt_10_cells_pIC <- polyIC_fluidigm_plate_10_cell$Hprt
+
+#Normalize to Actb
+actb_10_cells_pIC <- polyIC_fluidigm_plate_10_cell$Actb
+#Delta ct
+polyIC_fluidigm_plate_10_cell <- -(polyIC_fluidigm_plate_10_cell - hprt_10_cells_pIC)
+
+#Fold of Hprt
+polyIC_fluidigm_plate_10_cell <- 2^(polyIC_fluidigm_plate_10_cell)
+#Transpose
+polyIC_fluidigm_plate_10_cell <- t(polyIC_fluidigm_plate_10_cell)
+polyIC_fluidigm_plate_10_cell <- as.data.frame(polyIC_fluidigm_plate_10_cell)
+
+#Invert the Ct-values
+selected_genes_hm <- read.delim("selected_genelist_heatmap_fluidigm_poster.txt", stringsAsFactors = F)
+selected_genes_hm <- as.data.frame(selected_genes_hm[,1])
+colnames(selected_genes_hm)[1]<-"Gene"
+
+polyIC_fluidigm_plate_10_cell$Gene <- rownames(polyIC_fluidigm_plate_10_cell)
+
+polyIC_fluidigm_plate_10_cell <- merge(polyIC_fluidigm_plate_10_cell, selected_genes_hm, by = "Gene", all.y = T)
+rownames(polyIC_fluidigm_plate_10_cell) <- polyIC_fluidigm_plate_10_cell$Gene
+polyIC_fluidigm_plate_10_cell <- polyIC_fluidigm_plate_10_cell[,2:29]
+
+z_score_polyIC_fluidigm_plate_10_cell <- t( apply(  polyIC_fluidigm_plate_10_cell ,1,scale))
+
+
+#Since there is only one value for Lin28b this turns to NaN. Replace with 1.
+z_score_polyIC_fluidigm_plate_10_cell[is.nan(z_score_polyIC_fluidigm_plate_10_cell)] <- 0
+
+colnames(z_score_polyIC_fluidigm_plate_10_cell) <- colnames(polyIC_fluidigm_plate_10_cell)
+rownames(z_score_polyIC_fluidigm_plate_10_cell) <- rownames(polyIC_fluidigm_plate_10_cell)
+
+z_score_polyIC_fluidigm_plate_10_cell[is.na(z_score_polyIC_fluidigm_plate_10_cell)] <- -20
+library(randomForest)
+hr <- randomForest(x = z_score_polyIC_fluidigm_plate_10_cell, y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hc <- randomForest(x = t( z_score_polyIC_fluidigm_plate_10_cell ), y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hr <- hclust(as.dist(1-hr$proximity), method = "ward.D2")
+hc <- hclust(as.dist(1-hc$proximity), method = "ward.D2")
+
+#Turn -20 into NA
+z_score_polyIC_fluidigm_plate_10_cell[z_score_polyIC_fluidigm_plate_10_cell== -20] <- NA
+#Reorder the data according to the clustering:
+z_score_polyIC_fluidigm_plate_10_cell <- z_score_polyIC_fluidigm_plate_10_cell[hr$order,hc$order]
+
+library(pheatmap)
+ann_colors_3 = list(treatment=c("pIC"="cyan","PBS"="hotpink"),cell_type=c("CD41high"="darkgoldenrod1","CD41med"="darkgreen","CD41neg"="white","HSC"="blue"))
+breakList <- seq(-1, 1, by = 0.01)
+library(RColorBrewer)
+pheatmap(mat = z_score_polyIC_fluidigm_plate_10_cell,  cluster_rows = F, cluster_cols = F,  show_rownames = T, show_colnames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdYlBu")))(length(breakList)), breaks = breakList, annotation_col = bulk_pIC_sample_type[,1:2], annotation_colors=ann_colors_3,  na_col = "grey")
+
+```
+
+```{r ABM_poly_IC_10_cell_for_heatmap_selected_genes_no_norm, include=FALSE}
+polyIC_fluidigm_plate_10_cell <- read.delim("polyIC_fluidigm/#377TK_heatmap_10c_values.txt", stringsAsFactors = F)
+
+################### data massaging ######################
+# Turn all fail in the qc to 999 if there are others in the plate
+
+polyIC_fluidigm_plate_10_cell <- replace(polyIC_fluidigm_plate_10_cell, polyIC_fluidigm_plate_10_cell == 999, NA) 
+bulk_pIC_sample_type <- as.data.frame( cbind(polyIC_fluidigm_plate_10_cell$treatment,polyIC_fluidigm_plate_10_cell$cell_type) )
+colnames(bulk_pIC_sample_type)<-c("treatment","cell_type")
+
+rownames(polyIC_fluidigm_plate_10_cell) <- polyIC_fluidigm_plate_10_cell$sample_nr
+rownames(bulk_pIC_sample_type) <- polyIC_fluidigm_plate_10_cell$sample_nr
+
+polyIC_fluidigm_plate_10_cell <- polyIC_fluidigm_plate_10_cell[,c(5:100) ]
+
+polyIC_fluidigm_plate_10_cell <- as.data.frame(polyIC_fluidigm_plate_10_cell)
+
+#Invert the Ct-values
+polyIC_fluidigm_plate_10_cell <- 1/polyIC_fluidigm_plate_10_cell
+polyIC_fluidigm_plate_10_cell <- as.data.frame(t(polyIC_fluidigm_plate_10_cell))
+
+selected_genes_hm <- read.delim("selected_genelist_heatmap_fluidigm_poster.txt", stringsAsFactors = F)
+selected_genes_hm <- as.data.frame(selected_genes_hm[,1])
+colnames(selected_genes_hm)[1]<-"Gene"
+
+polyIC_fluidigm_plate_10_cell$Gene <- rownames(polyIC_fluidigm_plate_10_cell)
+
+polyIC_fluidigm_plate_10_cell <- merge(polyIC_fluidigm_plate_10_cell, selected_genes_hm, by = "Gene", all.y = T)
+rownames(polyIC_fluidigm_plate_10_cell) <- polyIC_fluidigm_plate_10_cell$Gene
+polyIC_fluidigm_plate_10_cell <- polyIC_fluidigm_plate_10_cell[,2:29]
+
+z_score_polyIC_fluidigm_plate_10_cell <- t( apply(  polyIC_fluidigm_plate_10_cell ,1,scale))
+#Since there is only one value for Lin28b this turns to NaN. Replace with 1.
+z_score_polyIC_fluidigm_plate_10_cell[is.nan(z_score_polyIC_fluidigm_plate_10_cell)] <- 0
+
+colnames(z_score_polyIC_fluidigm_plate_10_cell) <- colnames(polyIC_fluidigm_plate_10_cell)
+rownames(z_score_polyIC_fluidigm_plate_10_cell) <- rownames(polyIC_fluidigm_plate_10_cell)
+
+z_score_polyIC_fluidigm_plate_10_cell[is.na(z_score_polyIC_fluidigm_plate_10_cell)] <- -20
+library(randomForest)
+hr <- randomForest(x = z_score_polyIC_fluidigm_plate_10_cell, y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hc <- randomForest(x = t( z_score_polyIC_fluidigm_plate_10_cell ), y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hr <- hclust(as.dist(1-hr$proximity), method = "ward.D2")
+hc <- hclust(as.dist(1-hc$proximity), method = "ward.D2")
+
+#Turn -20 into NA
+z_score_polyIC_fluidigm_plate_10_cell[z_score_polyIC_fluidigm_plate_10_cell== -20] <- NA
+#Reorder the data according to the clustering:
+z_score_polyIC_fluidigm_plate_10_cell <- z_score_polyIC_fluidigm_plate_10_cell[hr$order,hc$order]
+
+library(pheatmap)
+ann_colors_3 = list(treatment=c("pIC"="cyan","PBS"="hotpink"),cell_type=c("CD41high"="darkgoldenrod1","CD41med"="darkgrey","CD41neg"="white"))
+breakList <- seq(-1, 1, by = 0.01)
+library(RColorBrewer)
+pheatmap(mat = z_score_polyIC_fluidigm_plate_10_cell,  cluster_rows = F, cluster_cols = F,  show_rownames = T, show_colnames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdYlBu")))(length(breakList)), breaks = breakList, annotation_col = bulk_pIC_sample_type[,1:2],   na_col = "grey")
+
+```

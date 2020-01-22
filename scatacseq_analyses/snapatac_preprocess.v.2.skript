@@ -1,0 +1,92 @@
+#! /bin/bash
+#Script that catenated preprocess 10x scATAC data and prepares it for SnapATAC. We will create snap files that then will be 
+set -ueo #Exit immediately if a simple command exits with a non-zero status
+
+#Set paths and dependencies
+sample_path="/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis"
+threads=12
+ref_dir_bwa="/mnt/data/bioinfo_tools_and_refs/refs/index/bwa/mm10.GRCm38.p5.genome_reg_chr.fa"
+ref_gen="mm10"
+chrom_size_file="/mnt/data/common/jonas/atacseq/for_scatac_pro/scATAC-pro_1.0.0/annotation/chrom_mm10.sizes"
+
+#samples="ABM_CD41neg ABM_CD41pos ABM_MkP FL_HSC"
+samples="ABM_CD41pos ABM_MkP FL_HSC"
+
+for i in ${samples}; do
+
+	directory=${sample_path}/${i}
+	echo "${directory}"
+
+        #Check if directory exists
+        [ -d ${directory} ] && echo "${directory} exists."
+        [ -d ${directory} ] || echo "${directory} DOES NOT exist."
+        [ -d ${directory} ] || exit
+
+        cd ${directory}
+	mkdir -p ${i}.snap
+	
+	#Prepare 10x files through integrating barcodes into the name
+	#check if the files exists
+
+if [ -f ${directory}/${i}.snap/${i}.dex.R1_val_1.fq.gz ] && [ -f ${directory}/${i}.snap/${i}.dex.R3_val_2.fq.gz ]; then
+
+	echo "Moving straight to alignment"
+	cd ${i}.snap
+else
+
+	if ( [ -f ${i}.snap/${i}.dex.R1.fastq.gz ] && [ -f ${i}.snap/${i}.dex.R3.fastq.gz ] ) ; then
+    		echo "Demultiplexed fastqs already exists. Moving on to trimming"
+	else 
+    
+		#R1
+		echo "snaptools dex-fastq --input-fastq=${i}.R1.fastq.gz --output-fastq=${i}.R1.dex.fastq.gz --index-fastq-list ${i}.R2.fastq.gz"
+		snaptools dex-fastq --input-fastq=${i}.R1.fastq.gz --output-fastq=${i}.dex.R1.fastq.gz --index-fastq-list ${i}.R2.fastq.gz
+		#R3
+		echo "snaptools dex-fastq --input-fastq=${i}.R3.fastq.gz --output-fastq=${i}.R3.dex.fastq.gz --index-fastq-list ${i}.R2.fastq.gz"
+		snaptools dex-fastq --input-fastq=${i}.R3.fastq.gz --output-fastq=${i}.dex.R3.fastq.gz --index-fastq-list ${i}.R2.fastq.gz
+		mv *dex* ${i}.snap
+	fi	
+	
+	cd ${i}.snap
+	#Trim the files with trim_galore
+	#Check of files for trimming exist.
+	if [ -f ${i}.dex.R1_val_1.fq.gz ] && [ -f ${i}.dex.R3_val_2.fq.gz ]; then
+		echo "Trimmed files for mapping already exist."
+	else
+		echo "trim_galore -j ${threads} --paired --gzip --fastqc ${i}.R1.dex.fastq.gz ${i}.R3.dex.fastq.gz"
+        	trim_galore -j ${threads} --paired --gzip --fastqc ${i}.dex.R1.fastq.gz ${i}.dex.R3.fastq.gz
+			
+	fi
+fi
+
+	#Test to align data without creating a reference index. If this doesn't work I must create a bwa index with the tool.
+	if [ -f  ${i}.snap.bam ]; then
+		echo "Bam-file exist. No need for mapping."
+	else
+		echo "snaptools align-paired-end --input-ref
+erence=${ref_dir_bwa} --input-fastq1=${i}.dex.R1_val_1.fq.gz --input-fastq2=${i}.dex.R3_val_2.fq.gz --output-bam=${i}.snap.bam --aligner=bwa --path-to-aligner=/mnt/data/common/jonas/atacseq/for_scatac_pro/bwa-0.7.17  --read-fastq-command=zcat --min-cov=0 --num-threads=${threads} --if-sort=True --tmp-folder=./ --overwrite=TRUE"
+		snaptools align-paired-end --input-reference=${ref_dir_bwa} --input-fastq1=${i}.dex.R1_val_1.fq.gz --input-fastq2=${i}.dex.R3_val_2.fq.gz --output-bam=${i}.snap.bam --aligner=bwa --path-to-aligner=/mnt/data/common/jonas/atacseq/for_scatac_pro/bwa-0.7.17  --read-fastq-command=zcat --min-cov=0 --num-threads=${threads} --if-sort=True --tmp-folder=./ --overwrite=TRUE
+	fi
+
+	#Create the snap-file
+	if [ -f  ${i}.snap ]; then
+		echo "Snap-file already exists."
+	else
+		echo "snaptools snap-pre --input-file=${i}.snap.bam --output-snap=${i}.snap --genome-name=${ref_gen} --genome-size=${chrom_size_file} --min-mapq=30 --min-flen=0 --max-flen=1000 --keep-chrm=FALSE --keep-single=FALSE --keep-secondary=FALSE --overwrite=True --min-cov=100  --verbose=True"
+		snaptools snap-pre --input-file=${i}.snap.bam --output-snap=${i}.snap --genome-name=${ref_gen} --genome-size=${chrom_size_file} --min-mapq=30 --min-flen=0 --max-flen=1000 --keep-chrm=FALSE --keep-single=FALSE --keep-secondary=FALSE --overwrite=True --min-cov=100  --verbose=True
+	fi
+
+
+	#Create cell-by-bin matrix
+	echo "snaptools snap-add-bmat --snap-file=${i}.snap --bin-size-list 1000 5000 --verbose=True"
+	snaptools snap-add-bmat --snap-file=${i}.snap --bin-size-list 1000 5000 --verbose=True
+
+	if [ -f  ${i}.snap ]; then
+		rm ${i}.dex.R1.fastq.gz ${i}.dex.R3.fastq.gz ${i}.dex.R1_val_1.fq.gz ${i}.dex.R3_val_2.fq.gz
+		echo "${i} finished processing!"
+	else
+		echo "${i}.snap does not exist. Something went wrong!"
+
+	fi
+done
+

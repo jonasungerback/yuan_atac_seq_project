@@ -1,0 +1,36 @@
+#!/bin/bash
+
+
+#set -ueo #Exit immediately if a simple command exits with a non-zero status#
+
+sample_path="/mnt/data/common/jonas/atacseq"
+sub_path="$sample_path/yuan_atac/ENCODE_pipeline_processing/"
+bowtie2_mm10_idx="/mnt/data/bioinfo_tools_and_refs/refs/index/bowtie2/mm10.GRCm38.p5_gencode_reg_chr"
+ref_gen="mm10"
+threads=16
+genome_size=2652783500 #mm10 genome size non-N bases
+
+samples="3_LIN28_HSC_dox 4_LIN28_LMPP_dox 5_BM_HSC 6_BM_LMPP 7_FL_HSC 9_FL_LMPP 10_FL_HSC 11_FL_LMPP 12_BM_HSC 13_BM_LMPP 14_WT_HSC_dox 15_WT_LMPP_dox 16_LIN28_HSC_dox 17_LIN28_LMPP_dox"
+
+for i in ${samples}; do
+
+	directory=${sub_path}${i}/${i}.${ref_gen}.bowtie2/${i}.pre_processed_files
+	cd ${directory}
+
+	#Create a file that can be coordinate sorted so it can be indexed and bigwigs made
+	
+	samtools sort -@ ${threads} -o ${i}.mrkdup_mapq10.s.bam ${i}.mrkdup_mapq10.bam
+	samtools index -@ ${threads} ${i}.mrkdup_mapq10.s.bam  	
+
+	#Create bigwig with deeptools
+	echo "Creating bigwigs with deeptools."
+	echo "bamCoverage -b ${i}.mrkdup_mapq10.s.bam --normalizeTo1x ${genome_size} --centerReads -o ../${i}.for_genome_browser/${i}.mrkdup_mapq10.bw"	
+
+	bamCoverage -b ${i}.mrkdup_mapq10.s.bam --normalizeTo1x ${genome_size} --centerReads -o ../${i}.for_genome_browser/${i}.mrkdup_mapq10.bw
+
+	#Clean up
+	echo "Cleaning up!"
+	rm *s.bam*
+
+
+done

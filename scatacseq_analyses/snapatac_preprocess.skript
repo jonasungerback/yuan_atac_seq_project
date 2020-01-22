@@ -1,0 +1,55 @@
+#! /bin/bash
+#Script that catenated preprocess 10x scATAC data and prepares it for SnapATAC. We will create snap files that then will be 
+set -ueo #Exit immediately if a simple command exits with a non-zero status
+
+#Set paths and dependencies
+sample_path="/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis"
+threads=12
+ref_dir_bwa="/mnt/data/bioinfo_tools_and_refs/refs/index/bwa/mm10.GRCm38.p5.genome_reg_chr.fa"
+ref_gen="mm10"
+chrom_size_file="/mnt/data/common/jonas/atacseq/for_scatac_pro/scATAC-pro_1.0.0/annotation/chrom_mm10.sizes"
+
+samples="ABM_CD41neg ABM_CD41pos ABM_MkP FL_HSC"
+
+for i in ${samples}; do
+
+	directory=${sample_path}/${i}
+	echo "${directory}"
+
+        #Check if directory exists
+        [ -d ${directory} ] && echo "${directory} exists."
+        [ -d ${directory} ] || echo "${directory} DOES NOT exist."
+        [ -d ${directory} ] || exit
+
+        cd ${directory}
+	mkdir -p ${i}.snap
+	
+	#Prepare 10x files through integrating barcodes into the name
+	#R1
+	echo "snaptools dex-fastq --input-fastq=${i}.R1.fastq.gz --output-fastq=${i}.R1.dex.fastq.gz --index-fastq-list ${i}.R2.fastq.gz"
+	snaptools dex-fastq --input-fastq=${i}.R1.fastq.gz --output-fastq=${i}.dex.R1.fastq.gz --index-fastq-list ${i}.R2.fastq.gz
+	#R3
+	echo "snaptools dex-fastq --input-fastq=${i}.R3.fastq.gz --output-fastq=${i}.R3.dex.fastq.gz --index-fastq-list ${i}.R2.fastq.gz"
+	snaptools dex-fastq --input-fastq=${i}.R3.fastq.gz --output-fastq=${i}.dex.R3.fastq.gz --index-fastq-list ${i}.R2.fastq.gz
+	mv *dex* ${i}.snap
+	cd ${i}.snap
+	
+	#Trim the files with trim_galore
+	echo "trim_galore -j ${threads} --paired --gzip --fastqc ${i}.R1.dex.fastq.gz ${i}.R3.dex.fastq.gz"
+        trim_galore -j ${threads} --paired --gzip --fastqc ${i}.dex.R1.fastq.gz ${i}.dex.R3.fastq.gz
+	rm ${i}.dex.R1.fastq.gz ${i}.dex.R3.fastq.gz	
+
+	#Test to align data without creating a reference index. If this doesn't work I must create a bwa index with the tool.
+	echo "snaptools align-paired-end --input-reference=${ref_dir_bwa} --input-fastq1=${i}.dex.R1_val_1.fq.gz --input-fastq2=${i}.dex.R2_val_2.fq.gz --output-bam=${i}.snap.bam --aligner=bwa --path-to-aligner=/mnt/data/common/jonas/atacseq/for_scatac_pro/bwa-0.7.17  --read-fastq-command=zcat --min-cov=0 --num-threads=${threads} --if-sort=True --tmp-folder=./ --overwrite=TRUE"
+	snaptools align-paired-end --input-reference=${ref_dir_bwa} --input-fastq1=${i}.dex.R1_val_1.fq.gz --input-fastq2=${i}.dex.R2_val_2.fq.gz --output-bam=${i}.snap.bam --aligner=bwa --path-to-aligner=/mnt/data/common/jonas/atacseq/for_scatac_pro/bwa-0.7.17  --read-fastq-command=zcat --min-cov=0 --num-threads=${threads} --if-sort=True --tmp-folder=./ --overwrite=TRUE
+
+	#Create the snap-file
+	echo "snaptools snap-pre --input-file=${i}.snap.bam --output-snap=${i}.snap --genome-name=${ref_gen} --genome-size=${chrom_size_file} --min-mapq=30 --min-flen=0 --max-flen=1000 --keep-chrm=TRUE --keep-single=FALSE --keep-secondary=FALSE --overwrite=True --min-cov=100  --verbose=True"
+	snaptools snap-pre --input-file=${i}.snap.bam --output-snap=${i}.snap --genome-name=${ref_gen} --genome-size=${chrom_size_file} --min-mapq=30 --min-flen=0 --max-flen=1000 --keep-chrm=TRUE --keep-single=FALSE --keep-secondary=FALSE --overwrite=True --min-cov=100  --verbose=True
+
+	#Create cell-by-bin matrix
+	echo "snaptools snap-add-bmat --snap-file=${i}.snap --bin-size-list 1000 5000 10000 --verbose=True"
+	snaptools snap-add-bmat --snap-file=${i}.snap --bin-size-list 1000 5000 --verbose=True
+
+done
+
