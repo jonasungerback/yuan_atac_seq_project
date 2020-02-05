@@ -1,0 +1,154 @@
+---
+title: "peakMatrixToFragments"
+author: "Jonas Ungerbäck"
+date: "2/2/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#Prepare a long format file from the peak-matrix that can be filtered for intervals, samples or cells.
+
+rm(list=setdiff(ls(), c("x.sp3.sample_peaks", "peaks.df")))
+peak.matrix <- t (as(object = x.sp3.sample_peaks@pmat, Class = 'matrix') )
+colnames(peak.matrix) <- x.sp3.sample_peaks@sample
+rownames(peak.matrix) <- paste(peaks.df[,1],peaks.df[,2],peaks.df[,3],sep = "_")
+
+library(reshape2)
+peaks.df <- as.data.frame( peak.matrix )
+#table(colnames(peaks.df))
+#CD41neg CD41pos  FL_HSC     MkP
+#   2314    1166    2358    2985
+
+colnames(peaks.df)[1:2358] <- paste(colnames(peaks.df)[1:2358], 1:2358, sep = "-")   
+colnames(peaks.df)[2359:4672] <- paste(colnames(peaks.df)[2359:4672], 1:2314, sep = "-")
+colnames(peaks.df)[4673:5838] <- paste(colnames(peaks.df)[4673:5838], 1:1166, sep = "-")
+colnames(peaks.df)[5839:8823] <- paste(colnames(peaks.df)[5839:8823], 1:2985, sep = "-")
+                                    
+                                  
+peaks.df$peaks <- rownames(peak.matrix) 
+peaks.df <- melt(peaks.df, id.var = c("peaks"))
+
+
+#Save only 0 columns.
+peaks.df <- subset(peaks.df, peaks.df$value == 1)
+
+peaks.df <- peaks.df[,c(1,2)]
+#Split the peaks.
+library(stringr)
+peaks.df$peaks <- as.character( peaks.df$peak )
+s <- str_split_fixed(peaks.df$peak, "_",3)
+peaks.df <- cbind(as.data.frame( s[,1] ),as.data.frame( s[,2] ), as.data.frame( s[,3]),  peaks.df[,2])
+colnames(peaks.df)[1:4]<-c("chr","start","end","cell")
+
+s <- str_split_fixed(peaks.df$cell, "-",2)
+peaks.df <- cbind(peaks.df[,1:3],as.data.frame( s[,1] ),as.data.frame( s[,2] ))
+colnames(peaks.df)[4:5] <- c("cell_type", "cell_nr")
+peaks.df$cell <- paste(peaks.df$cell_type,peaks.df$cell_nr, sep ="_")
+peaks.df <- peaks.df[,c(1:3,6,4:5)]
+
+peaks.df$chr <- as.character(peaks.df$chr)
+peaks.df$start <- as.numeric(as.character(peaks.df$start))
+peaks.df$end <- as.numeric(as.character(peaks.df$end))
+peaks.df$cell_nr <- as.numeric(as.character(peaks.df$cell_nr))
+
+save.image("peakMatrixToFragments.RData")
+
+#Write a function that takes a random cells from all populations from the df.
+
+randomCellsToBed <- function(df, cell_number) {
+  
+  #Subset the df onto celltypes
+  FL <- subset(df,df$cell_type == "FL_HSC")
+  CD41neg <- subset(df,df$cell_type == "CD41neg")
+  CD41pos <- subset(df,df$cell_type == "CD41pos")
+  MkP <- subset(df,df$cell_type == "MkP")
+  
+  #Get random numbers to select the rows
+  rand_FL_peaks <- sample(1:max(FL$cell_nr), cell_number)
+  rand_CD41neg_peaks <- sample(1:max(CD41neg$cell_nr), cell_number)
+  rand_CD41pos_peaks <- sample(1:max(CD41pos$cell_nr), cell_number)
+  rand_MkP_peaks <- sample(1:max(MkP$cell_nr), cell_number)
+   
+  new_df = NULL
+  
+  #The conde below brings out the rows with the cell_nr matching the random numbers above. One cell type at the time.
+  slices_FL = lapply( rand_FL_peaks, function(id, daf) { daf[which(daf$cell_nr==id),] }, FL )
+  counter=1
+  for (i in rand_FL_peaks){
+    colnames(slices_FL[[counter]]) <- NULL
+    colnames(slices_FL[[counter]])[1]<-paste("track name=FL",i, sep = "_")
+    colnames(slices_FL[[counter]])[2]<-"visibility=4"
+    colnames(slices_FL[[counter]])[3]<-"color=255,0,0"
+    counter=counter+1
+  }
+  
+  slices_CD41neg = lapply( rand_CD41neg_peaks, function(id, daf) { daf[which(daf$cell_nr==id),] }, CD41neg )
+  counter=1
+  for (i in rand_CD41neg_peaks){
+    colnames(slices_CD41neg[[counter]]) <- NULL
+    colnames(slices_CD41neg[[counter]])[1]<-paste("track name=CD41neg",i, sep = "_")
+    colnames(slices_CD41neg[[counter]])[2]<-"visibility=4"
+    colnames(slices_CD41neg[[counter]])[3]<-"color=0,0,255"
+    counter=counter+1
+  }
+  
+  slices_CD41pos = lapply( rand_CD41pos_peaks, function(id, daf) { daf[which(daf$cell_nr==id),] }, CD41pos )
+  counter=1
+  for (i in rand_CD41pos_peaks){
+    colnames(slices_CD41pos[[counter]]) <- NULL
+    colnames(slices_CD41pos[[counter]])[1]<-paste("track name=CD41pos",i, sep = "_")
+    colnames(slices_CD41pos[[counter]])[2]<-"visibility=4"
+    colnames(slices_CD41pos[[counter]])[3]<-"color=0,255,0"
+    counter=counter+1
+  }
+  
+  slices_MkP = lapply( rand_MkP_peaks, function(id, daf) { daf[which(daf$cell_nr==id),] }, MkP )
+  counter=1
+  for (i in rand_MkP_peaks){
+    colnames(slices_MkP[[counter]]) <- NULL
+    colnames(slices_MkP[[counter]])[1]<-paste("track name=MkP",i, sep = "_")
+    colnames(slices_MkP[[counter]])[2]<-"visibility=4"
+    colnames(slices_MkP[[counter]])[3]<-"color=204,204,0"
+    counter=counter+1
+  }  
+    
+  complete_list <- c(slices_FL,slices_CD41neg,slices_CD41pos,slices_MkP)
+  
+  return(complete_list)
+}
+  
+
+test <-randomCellsToBed(df = peaks.df, cell_number = 250)
+
+setwd("/mnt/data/common/jonas/scatac/191204_yuan_FLvsBM_HSC_BHHTF7DRXX/snap_atac_analysis/single_cell_bed_tracks/")
+
+  for (i in 1:length(test)){
+    write.table(x = test[[i]], file = paste(colnames(test[[i]][1]),".bed", sep = "_"), quote = F, sep = "\t", col.names = T, row.names = F)
+  } 
+
+
+write.table(x = test[,1:4], file = "single_cell.bed", quote = F, sep = "\t", row.names = F,col.names = F, row.names = F)
+
+
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
