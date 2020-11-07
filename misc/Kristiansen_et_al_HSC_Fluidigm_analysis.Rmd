@@ -487,3 +487,516 @@ library(RColorBrewer)
 pheatmap(mat = z_score_polyIC_fluidigm_plate_10_cell,  cluster_rows = F, cluster_cols = F,  show_rownames = T, show_colnames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdYlBu")))(length(breakList)), breaks = breakList, annotation_col = bulk_pIC_sample_type[,1:2],   na_col = "grey")
 
 ```
+
+
+
+
+```{r SC_fluidigm_for_heatmap, include=FALSE}
+sc_fluidigm_for_umap <- read.delim("SC_fluidigm_for_UMAP_24APR2020_data.txt", stringsAsFactors = F)
+rownames(sc_fluidigm_for_umap)<- sc_fluidigm_for_umap[,1]
+sc_fluidigm_for_umap <- sc_fluidigm_for_umap[,-1]
+
+# Read in groups
+groups_c_fluidigm_for_umap <- read.delim("SC_fluidigm_for_UMAP_24APR2020_groups.txt", stringsAsFactors = F, header = F)
+colnames(groups_c_fluidigm_for_umap) <- groups_c_fluidigm_for_umap[3,]
+#Turn 999 into NA
+sc_fluidigm_for_umap[sc_fluidigm_for_umap == 999] <- NA
+
+#Invert the Ct-values
+sc_fluidigm_for_umap <- 1/sc_fluidigm_for_umap
+#sc_fluidigm_for_umap[is.na(sc_fluidigm_for_umap)] <- 0
+
+library(scater)
+library(SingleCellExperiment)
+#Create a single cell experiment
+sce <- SingleCellExperiment(assays = list(counts = as.matrix(sc_fluidigm_for_umap), logcounts = as.matrix(sc_fluidigm_for_umap)))
+
+sce$cell_type <- colnames(groups_c_fluidigm_for_umap)
+sce$stage <- colnames(groups_c_fluidigm_for_umap)
+sce$pIC <- colnames(groups_c_fluidigm_for_umap)
+#Run PCA with scater
+sce <- runPCA(sce, ncomponents=32, ntop=32)
+sce <- runUMAP(sce)
+#Plot the OPCA colored by cell type-
+plotReducedDim(sce, use_dimred = "PCA", colour_by = "stage")
+plotReducedDim(sce, use_dimred = "UMAP", colour_by = "stage")
+
+
+sce2 <- SingleCellExperiment(assays = list(counts = t(as.matrix(sce@reducedDims$PCA)), logcounts = t(as.matrix(sce@reducedDims$PCA))))
+sce2 <- runUMAP(sce2)
+sce2$cell_type <- sce$cell_type
+sce2$stage <- colnames(groups_c_fluidigm_for_umap)
+sce2$pIC <- colnames(groups_c_fluidigm_for_umap)
+plotReducedDim(sce2, use_dimred = "UMAP", colour_by = "stage")
+
+#Maybe I need to normalize the data first? z-score and quantile.
+
+#z-score normalize
+library(preprocessCore)
+#Include quantile norm
+#Quant-norm (try first)
+z_score_sc_fluidigm_for_umap <- t( apply( normalize.quantiles(as.matrix( sc_fluidigm_for_umap) ) ,1,scale))
+
+#No quant-norm
+z_score_sc_fluidigm_for_umap <- t( apply(  sc_fluidigm_for_umap ,1,scale))
+
+colnames(z_score_sc_fluidigm_for_umap) <- colnames(sc_fluidigm_for_umap)
+rownames(z_score_sc_fluidigm_for_umap) <- rownames(sc_fluidigm_for_umap)
+
+#Create a single cell experiment. Use the z-score but no-quant normalization. Looks best in a heatmap.
+z_score_sc_fluidigm_for_umap[is.na(z_score_sc_fluidigm_for_umap)] <- 0
+
+sce <- SingleCellExperiment(assays = list(counts = as.matrix(z_score_sc_fluidigm_for_umap), logcounts = as.matrix(z_score_sc_fluidigm_for_umap)))
+
+colnames(groups_c_fluidigm_for_umap) <- groups_c_fluidigm_for_umap[3,]
+
+sce$cell_type <- colnames(groups_c_fluidigm_for_umap)
+sce$stage <- colnames(groups_c_fluidigm_for_umap)
+sce$pIC <- colnames(groups_c_fluidigm_for_umap)
+#Run PCA with scater
+sce <- runPCA(sce, ncomponents=32, ntop=32)
+sce <- runUMAP(sce, ncomponents = 32, ntop = 32)
+#Plot the OPCA colored by cell type-
+plotReducedDim(sce, use_dimred = "PCA", colour_by = "cell_type",ncomponents = c(2,3))
+plotReducedDim(sce, use_dimred = "UMAP", colour_by = "stage")
+
+
+sce2 <- SingleCellExperiment(assays = list(counts = t(as.matrix(sce@reducedDims$PCA)), logcounts = t(as.matrix(sce@reducedDims$PCA))))
+sce2 <- runUMAP(sce2)
+sce2$cell_type <- sce$cell_type
+sce2$stage <- colnames(groups_c_fluidigm_for_umap)
+sce2$pIC <- colnames(groups_c_fluidigm_for_umap)
+plotReducedDim(sce2, use_dimred = "UMAP", colour_by = "stage")
+
+#Make a pheatmap
+
+#Random forest
+ann_col_sc <- as.data.frame(cbind(t(groups_c_fluidigm_for_umap)))
+
+rownames(ann_col_sc)<-colnames(sc_fluidigm_for_umap)
+colnames(ann_col_sc)<- c("cell_type", "stage", "pIC")
+
+#for_hm_hsc_fluidigm_plate_1_cell[is.na(for_hm_hsc_fluidigm_plate_1_cell)] <- 
+
+z_score_sc_fluidigm_for_umap[is.na(z_score_sc_fluidigm_for_umap)] <- -20
+library(randomForest)
+hr <- randomForest(x = z_score_sc_fluidigm_for_umap, y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hc <- randomForest(x = t( z_score_sc_fluidigm_for_umap ), y = NULL, ntree = 10000, proximity = TRUE, oob.prox = TRUE)
+hr <- hclust(as.dist(1-hr$proximity), method = "ward.D2")
+hc <- hclust(as.dist(1-hc$proximity), method = "ward.D2")
+
+#Turn 0 into NA
+z_score_sc_fluidigm_for_umap[z_score_sc_fluidigm_for_umap == -20] <- NA
+#Reorder the data according to the clustering:
+z_score_sc_fluidigm_for_umap <- z_score_sc_fluidigm_for_umap[hr$order,hc$order]
+
+library(pheatmap)
+breakList <- seq(-2, 2, by = 0.01)
+library(RColorBrewer)
+pheatmap(mat = z_score_sc_fluidigm_for_umap,  cluster_rows = F, cluster_cols = F,  show_rownames = T, show_colnames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdYlBu")))(length(breakList)), breaks = breakList, annotation_col = ann_col_sc[,1:3], annotation_colors = ann_colors,  na_col = "grey", scale ="row")
+
+
+
+```
+
+```{r plotting_SC_fluidigm_for_heatmap, include=FALSE}
+
+#No quant-norm
+z_score_sc_fluidigm_for_umap <- t( apply(  sc_fluidigm_for_umap ,1,scale))
+
+colnames(z_score_sc_fluidigm_for_umap) <- colnames(sc_fluidigm_for_umap)
+rownames(z_score_sc_fluidigm_for_umap) <- rownames(sc_fluidigm_for_umap)
+
+#Create a single cell experiment. Use the z-score but no-quant normalization. Looks best in a heatmap.
+z_score_sc_fluidigm_for_umap[is.na(z_score_sc_fluidigm_for_umap)] <- 0
+
+sce <- SingleCellExperiment(assays = list(counts = as.matrix(z_score_sc_fluidigm_for_umap), logcounts = as.matrix(z_score_sc_fluidigm_for_umap)))
+
+colnames(groups_c_fluidigm_for_umap) <- groups_c_fluidigm_for_umap[3,]
+
+sce$cell_type <- colnames(groups_c_fluidigm_for_umap)
+sce$stage <- colnames(groups_c_fluidigm_for_umap)
+sce$pIC <- colnames(groups_c_fluidigm_for_umap)
+#Run PCA with scater
+sce <- runPCA(sce, ncomponents=32, ntop=32)
+sce <- runUMAP(sce)
+#Plot the OPCA colored by cell type-
+plotReducedDim(sce, use_dimred = "PCA", colour_by = "cell_type", shape_by = "stage")
+plotReducedDim(sce, use_dimred = "UMAP", colour_by = "pIC")
+
+
+sce2 <- SingleCellExperiment(assays = list(counts = t(as.matrix(sce@reducedDims$PCA)), logcounts = t(as.matrix(sce@reducedDims$PCA))))
+sce2 <- runUMAP(sce2)
+sce2$cell_type <- sce$cell_type
+sce2$stage <- colnames(groups_c_fluidigm_for_umap)
+sce2$pIC <- colnames(groups_c_fluidigm_for_umap)
+plotReducedDim(sce2, use_dimred = "UMAP", colour_by = "cell_type", shape_by = "stage")
+
+
+
+
+```
+
+```{r SC_fluidigm_old_fashioned_PCA, include=FALSE}
+for_pca<-sc_fluidigm_for_umap
+for_pca[is.na(for_pca)] <- 0
+
+for_pca<-for_pca+0.01
+for_pca<-log(for_pca)
+
+gene.means <- apply(for_pca,1,mean)
+
+dfl.base.c <- sweep(for_pca, 1, gene.means, "-")
+
+#PCA
+pca.base.c <- prcomp(t(dfl.base.c), scale=FALSE, center=FALSE, retx=TRUE, cor=TRUE)
+print(summary(pca.base.c))
+eigenvectors <- as.data.frame(pca.base.c$rotation)
+loadings.base <- t(as.matrix(dfl.base.c)) %*% as.matrix(eigenvectors)
+loadings.base <- as.data.frame(loadings.base)
+
+#PCA1: 26.4% of the variation
+#PCA2: 7.4% of the cariation.
+
+PCAscores <- pca.base.c$x
+
+#Calculate the loadings.
+PCAloadings <- pca.base.c$rotation
+
+#Plot
+loadings.base<-cbind(loadings.base,t(groups_c_fluidigm_for_umap[1,]))
+colnames(loadings.base)[33]<-"cell_type"
+library(ggplot2)
+library(ggfortify)
+library(ggalt)
+library(ggExtra)
+library(ggpubr)
+#Plot components and loadings with ggplot
+#PC1 vs PC2
+ggplot()+geom_point(data = loadings.base, aes(PC1,PC2, fill=factor(cell_type), shape=factor(cell_type)), size=4)+
+  scale_fill_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_shape_manual(values=c(23,23,23,21,21,21,21,21,21))+
+  geom_segment(data  = PCAloadings, aes(x=0, y= 0, xend=PC1*10,yend=PC2*10), size=0.5, arrow=arrow(), colour ="black")+
+  geom_label(data=PCAloadings, aes(x=PC1*10, y=PC2*10,  label = rownames(PCAloadings)))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggsave(filename = "200427_Fluidigm_pIC_PCA_PC1vsPC2.eps", device = "eps",dpi = 300)
+
+p <- ggplot(data = loadings.base, aes(PC1,PC2, colour=cell_type))+
+  geom_point( size=4)+
+  scale_color_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_fill_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_shape_manual(values=c(23,23,23,21,21,21,21,21,21))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggMarginal(p, data = loadings.base, x=PC1, y=PC2, type = c("boxplot"), groupColour  = T, groupFill = T) 
+
+ggsave(filename = "200427_Fluidigm_pIC_PCA_PC1vsPC2_with_histo.pdf", device = "pdf",dpi = 300)
+
+
+#PC1 vs PC3
+ggplot()+
+  geom_point(data = loadings.base, aes(PC1,PC3, fill=cell_type, shape=cell_type), size=4)+
+  scale_fill_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_shape_manual(values=c(23,23,23,21,21,21,21,21,21))+
+  geom_segment(data  = PCAloadings, aes(x=0, y= 0, xend=PC1*10,yend=PC3*10), size=0.5, arrow=arrow(), colour ="black")+
+  geom_label(data=PCAloadings, aes(x=PC1*10, y=PC3*10,  label = rownames(PCAloadings)))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggsave(filename = "200427_Fluidigm_pIC_PCA_PC1vsPC3.eps", device = "eps",dpi = 300)
+
+p <- ggplot(data = loadings.base, aes(PC1,PC3, colour=cell_type))+
+  geom_point( size=4)+
+  scale_color_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_fill_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_shape_manual(values=c(23,23,23,21,21,21,21,21,21))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggMarginal(p, data = loadings.base, x=PC1, y=PC3, type = c("boxplot"), groupColour  = T, groupFill = T) 
+
+ggsave(filename = "200427_Fluidigm_pIC_PCA_PC1vsPC3_with_histo.pdf", device = "pdf",dpi = 300)
+
+
+#Try ploty
+
+plot_ly(loadings.base, x = ~PC1, y = ~PC2, z = ~PC3, color = ~cell_type, colors = c("black","blue","purple","green","magenta","yellow","orange","red","grey"), symbol = ~cell_type, symbols = c(23,23,23,21,21,21,21,21,21))
+
+
+```
+
+```{r SC_fluidigm_old_fashioned_PCA_sep_groups, include=FALSE}
+#preporcessing for what's in the paper starts here.
+
+for_pca<-sc_fluidigm_for_umap
+for_pca[is.na(for_pca)] <- 0
+
+for_pca<-for_pca+0.01
+for_pca<-log(for_pca)
+colnames(groups_c_fluidigm_for_umap) <- groups_c_fluidigm_for_umap[1,]
+table(colnames(groups_c_fluidigm_for_umap))
+
+
+
+ind_for_pca_untreat <- which(colnames(groups_c_fluidigm_for_umap) == "10d"|colnames(groups_c_fluidigm_for_umap) == "adult_int"|colnames(groups_c_fluidigm_for_umap) == "adult_neg"|colnames(groups_c_fluidigm_for_umap) == "adult_MkP") 
+
+ind_for_pca_treat <- which(colnames(groups_c_fluidigm_for_umap) == "10d_pIC_int"|colnames(groups_c_fluidigm_for_umap) == "10d_pIC_neg"|colnames(groups_c_fluidigm_for_umap) == "adult_pIC_high"|colnames(groups_c_fluidigm_for_umap) == "adult_pIC_int"|colnames(groups_c_fluidigm_for_umap) == "adult_pIC_neg"|colnames(groups_c_fluidigm_for_umap) == "adult_MkP")
+
+#Do pca untreated
+for_pca_untreat <- for_pca[,ind_for_pca_untreat]
+
+gene.means_untreat <- apply(for_pca_untreat,1,mean)
+
+dfl.base.untreat <- sweep(for_pca_untreat, 1, gene.means_untreat, "-")
+
+#PCA
+pca.base.untreat <- prcomp(t(dfl.base.untreat), scale=FALSE, center=FALSE, retx=TRUE, cor=TRUE)
+print(summary(pca.base.untreat))
+eigenvectors_untreat <- as.data.frame(pca.base.untreat$rotation)
+loadings.untreat <- t(as.matrix(dfl.base.untreat)) %*% as.matrix(eigenvectors_untreat)
+loadings.untreat <- as.data.frame(loadings.untreat)
+
+#PCA1: 25.5% of the variation
+#PCA2: 7.7% of the variation.
+#PCA3: 7.3% of the variation.
+
+#Plot
+loadings.untreat<-cbind(loadings.untreat,t(groups_c_fluidigm_for_umap[1,ind_for_pca_untreat]))
+colnames(loadings.untreat)[33]<-"cell_type"
+
+
+#Calculate the loadings.
+PCAloadings <-pca.base.untreat$rotation
+
+#Plot components and loadings with ggplot
+#PC1 vs PC2
+ggplot()+geom_point(data = loadings.untreat, aes(PC1,PC2, fill=factor(cell_type), shape=factor(cell_type)), size=4)+
+  scale_fill_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_shape_manual(values=c(21,21,21,21))+
+  geom_segment(data  = PCAloadings, aes(x=0, y= 0, xend=PC1*10,yend=PC2*10), size=0.5, arrow=arrow(), colour ="black")+
+  geom_label(data=PCAloadings, aes(x=PC1*10, y=PC2*10,  label = rownames(PCAloadings)))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggsave(filename = "200428_Fluidigm_untreated_PCA_PC1vsPC2.eps", device = "eps",dpi = 300)
+
+
+#PC1 vs PC3
+ggplot()+geom_point(data = loadings.untreat, aes(PC1,PC3, fill=factor(cell_type), shape=factor(cell_type)), size=4)+
+  scale_fill_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_shape_manual(values=c(21,21,21,21))+
+  geom_segment(data  = PCAloadings, aes(x=0, y= 0, xend=PC1*10,yend=PC3*10), size=0.5, arrow=arrow(), colour ="black")+
+  geom_label(data=PCAloadings, aes(x=PC1*10, y=PC3*10,  label = rownames(PCAloadings)))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggsave(filename = "200428_Fluidigm_untreated_PCA_PC1vsPC3.eps", device = "eps",dpi = 300)
+
+
+#Do pca treated
+for_pca_treat <- for_pca[,ind_for_pca_treat]
+
+gene.means_treat <- apply(for_pca_treat,1,mean)
+
+dfl.base.treat <- sweep(for_pca_treat, 1, gene.means_treat, "-")
+
+#PCA
+pca.base.treat <- prcomp(t(dfl.base.treat), scale=FALSE, center=FALSE, retx=TRUE, cor=TRUE)
+print(summary(pca.base.treat))
+eigenvectors_treat <- as.data.frame(pca.base.treat$rotation)
+loadings.treat <- t(as.matrix(dfl.base.treat)) %*% as.matrix(eigenvectors_treat)
+loadings.treat <- as.data.frame(loadings.treat)
+
+#PCA1: 29.6% of the variation
+#PCA2: 7.8% of the variation.
+#PCA3: 6.6% of the variation.
+
+#Plot
+loadings.treat<-cbind(loadings.treat,t(groups_c_fluidigm_for_umap[1,ind_for_pca_treat]))
+colnames(loadings.treat)[33]<-"cell_type"
+
+
+#Calculate the loadings.
+PCAloadings <-pca.base.treat$rotation
+
+#Plot components and loadings with ggplot
+#PC1 vs PC2
+ggplot()+geom_point(data = loadings.treat, aes(PC1,PC2, fill=factor(cell_type), shape=factor(cell_type)), size=4)+
+  scale_fill_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_shape_manual(values=c(21,21,21,21,21,21))+
+  geom_segment(data  = PCAloadings, aes(x=0, y= 0, xend=PC1*10,yend=PC2*10), size=0.5, arrow=arrow(), colour ="black")+
+  geom_label(data=PCAloadings, aes(x=PC1*10, y=PC2*10,  label = rownames(PCAloadings)))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggsave(filename = "200428_Fluidigm_treated_PCA_PC1vsPC2.eps", device = "eps",dpi = 300)
+
+#PC1 vs PC3
+ggplot()+geom_point(data = loadings.treat, aes(PC1,PC3, fill=factor(cell_type), shape=factor(cell_type)), size=4)+
+  scale_fill_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_shape_manual(values=c(21,21,21,21,21,21))+
+  geom_segment(data  = PCAloadings, aes(x=0, y= 0, xend=PC1*10,yend=PC3*10), size=0.5, arrow=arrow(), colour ="black")+
+  geom_label(data=PCAloadings, aes(x=PC1*10, y=PC3*10,  label = rownames(PCAloadings)))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggsave(filename = "200428_Fluidigm_treated_PCA_PC1vsPC3.eps", device = "eps",dpi = 300)
+```
+```{r plot_SC_fluidigm_old_fashioned_PCA_sep_groups_no_loadings, include=FALSE}
+
+###################This seems to be the part used in the paper.
+
+#PCA1: 25.5% of the variation
+#PCA2: 7.7% of the variation.
+#PCA3: 7.3% of the variation.
+
+#Plot
+loadings.untreat<-cbind(loadings.untreat,t(groups_c_fluidigm_for_umap[1,ind_for_pca_untreat]))
+colnames(loadings.untreat)[33]<-"cell_type"
+
+
+#Calculate the loadings.
+PCAloadings <-pca.base.untreat$rotation
+
+#Plot components and loadings with ggplot
+#PC1 vs PC2
+ggplot()+geom_point(data = loadings.untreat, aes(PC1,PC2, fill=factor(cell_type), shape=factor(cell_type)), size=8)+
+  scale_fill_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_shape_manual(values=c(21,21,21,21))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggsave(filename = "200428_Fluidigm_untreated_PCA_PC1vsPC2_no_loadings.eps", device = "eps",dpi = 300)
+
+
+#PC1 vs PC3
+ggplot()+
+  geom_point(data = loadings.untreat, aes(-1*PC1,PC3, fill=factor(cell_type), shape=factor(cell_type)), size=8)+
+  scale_fill_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_shape_manual(values=c(21,21,21,21))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggsave(filename = "200428_Fluidigm_untreated_PCA_PC1vsPC3_no_loadings_inverted.eps", device = "eps",dpi = 300)
+
+
+#Do pca treated
+
+#PCA1: 29.6% of the variation
+#PCA2: 7.8% of the variation.
+#PCA3: 6.6% of the variation.
+
+#Plot
+loadings.treat<-cbind(loadings.treat,t(groups_c_fluidigm_for_umap[1,ind_for_pca_treat]))
+colnames(loadings.treat)[33]<-"cell_type"
+
+
+#Calculate the loadings.
+PCAloadings <-pca.base.treat$rotation
+
+#Plot components and loadings with ggplot
+#PC1 vs PC2
+ggplot()+
+  geom_point(data = loadings.treat, aes(PC1,PC2, fill=factor(cell_type), shape=factor(cell_type)), size=8)+
+  scale_fill_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_shape_manual(values=c(21,21,21,21,21,21))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggsave(filename = "200428_Fluidigm_treated_PCA_PC1vsPC2_no_loadings.eps", device = "eps",dpi = 300)
+
+#PC1 vs PC3
+ggplot()+geom_point(data = loadings.treat, aes(PC1,PC3, fill=factor(cell_type), shape=factor(cell_type)), size=8)+
+  scale_fill_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_shape_manual(values=c(21,21,21,21,21,21))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggsave(filename = "200428_Fluidigm_treated_PCA_PC1vsPC3_no_loadings.eps", device = "eps",dpi = 300)
+
+
+ggplot()+geom_encircle(data = loadings.untreat, s_shape=-0.5,aes(PC1,PC3,group=factor(cell_type), fill=factor(cell_type)), alpha=0.4)+
+  geom_point(data = loadings.untreat, aes(PC1,PC3, fill=factor(cell_type), shape=factor(cell_type)), size=8)+
+  scale_fill_manual(values = c("black","blue","purple","green","magenta","yellow","orange","red","grey"))+
+  scale_shape_manual(values=c(21,21,21,21))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+```
+
+```{r plot_SC_fluidigm_old_fashioned_PCA_sep_groups_no_loadings_untreated_split_into_adult_and, include=FALSE}
+
+###################This seems to be the part used in the paper.
+
+# Separate for_pca_treat_into adult and 10d-
+ind_for_pca_treat <- which(colnames(groups_c_fluidigm_for_umap) == "10d_pIC_int"|colnames(groups_c_fluidigm_for_umap) == "10d_pIC_neg"|colnames(groups_c_fluidigm_for_umap) == "adult_pIC_high"|colnames(groups_c_fluidigm_for_umap) == "adult_pIC_int"|colnames(groups_c_fluidigm_for_umap) == "adult_pIC_neg"|colnames(groups_c_fluidigm_for_umap) == "adult_MkP")
+
+#Do pca adult treated + MkP
+for_pca_treat <- for_pca[,ind_for_pca_treat]
+
+ind_for_pca_treat_adult <- which(colnames(groups_c_fluidigm_for_umap) == "adult_pIC_high"|colnames(groups_c_fluidigm_for_umap) == "adult_pIC_int"|colnames(groups_c_fluidigm_for_umap) == "adult_pIC_neg"|colnames(groups_c_fluidigm_for_umap) == "adult_MkP")
+
+for_pca_treat_adult <- for_pca[,ind_for_pca_treat_adult]
+
+gene.means_treat_adult <- apply(for_pca_treat_adult,1,mean)
+
+dfl.base.treat_adult <- sweep(for_pca_treat_adult, 1, gene.means_treat_adult, "-")
+
+#PCA
+pca.base.treat_adult <- prcomp(t(dfl.base.treat_adult), scale=FALSE, center=FALSE, retx=TRUE, cor=TRUE)
+#PC1: 31.5%
+#PC2: 9.2%
+#PC3: 5.6%
+print(summary(pca.base.treat_adult))
+eigenvectors_treat_adult <- as.data.frame(pca.base.treat_adult$rotation)
+loadings.treat_adult <- t(as.matrix(dfl.base.treat_adult)) %*% as.matrix(eigenvectors_treat_adult)
+
+#Plot
+loadings.treat_adult<-cbind(as.data.frame(loadings.treat_adult),t(groups_c_fluidigm_for_umap[1,ind_for_pca_treat_adult]))
+colnames(loadings.treat_adult)[33]<-"cell_type"
+
+
+#Calculate the loadings.
+#PCAloadings <-pca.base.treat$rotation
+
+#Plot components and loadings with ggplot
+#PC1 vs PC2
+ggplot()+
+  geom_point(data = loadings.treat_adult, aes(PC1,PC2, fill=factor(cell_type), shape=factor(cell_type)), size=8)+
+  scale_fill_manual(values = c("black","blue","purple","green"))+
+  scale_shape_manual(values=c(21,21,21,21))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggsave(filename = "200902_Fluidigm_treated_PCA_PC1vsPC2_no_loadings_adult_only.eps", device = "eps",dpi = 300)
+
+
+# For the 10d, add in adult MkP.
+
+# Separate for_pca_treat_into adult and 10d-
+ind_for_pca_treat <- which(colnames(groups_c_fluidigm_for_umap) == "10d_pIC_int"|colnames(groups_c_fluidigm_for_umap) == "10d_pIC_neg"|colnames(groups_c_fluidigm_for_umap) == "adult_pIC_high"|colnames(groups_c_fluidigm_for_umap) == "adult_pIC_int"|colnames(groups_c_fluidigm_for_umap) == "adult_pIC_neg"|colnames(groups_c_fluidigm_for_umap) == "adult_MkP")
+
+ind_for_pca_treat_10 <- which(colnames(groups_c_fluidigm_for_umap) == "10d_pIC_int"|colnames(groups_c_fluidigm_for_umap) == "10d_pIC_neg"|colnames(groups_c_fluidigm_for_umap) == "adult_MkP")
+
+for_pca_treat_10 <- for_pca[,ind_for_pca_treat_10]
+
+gene.means_treat_10 <- apply(for_pca_treat_10,1,mean)
+
+dfl.base.treat_10 <- sweep(for_pca_treat_10, 1, gene.means_treat_10, "-")
+
+#PCA
+pca.base.treat_10 <- prcomp(t(dfl.base.treat_10), scale=FALSE, center=FALSE, retx=TRUE, cor=TRUE)
+#PC1: 32.1%
+#PC2: 9.0%
+#PC3: 6.6%
+print(summary(pca.base.treat_10))
+eigenvectors_treat_10 <- as.data.frame(pca.base.treat_10$rotation)
+loadings.treat_10 <- t(as.matrix(dfl.base.treat_10)) %*% as.matrix(eigenvectors_treat_10)
+
+#Plot
+loadings.treat_10<-cbind(as.data.frame(loadings.treat_10),t(groups_c_fluidigm_for_umap[1,ind_for_pca_treat_10]))
+colnames(loadings.treat_10)[33]<-"cell_type"
+
+
+#Calculate the loadings.
+#PCAloadings <-pca.base.treat$rotation
+
+#Plot components and loadings with ggplot
+#PC1 vs PC2
+ggplot()+
+  geom_point(data = loadings.treat_10, aes(PC1,PC2, fill=factor(cell_type), shape=factor(cell_type)), size=8)+
+  scale_fill_manual(values = c("red","yellow","black"))+
+  scale_shape_manual(values=c(21,21,21,21))+
+  theme_bw()+theme(legend.position = "bottom",legend.key=element_rect(colour="NA", fill = "NA"), legend.title=element_blank())
+
+ggsave(filename = "200902_Fluidigm_treated_PCA_PC1vsPC2_no_loadings_10d_plus_MkP.eps", device = "eps",dpi = 300)
+```

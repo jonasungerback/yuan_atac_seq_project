@@ -1,5 +1,5 @@
 #! /bin/bash
-#Script that catenated preprocess 10x scATAC data and prepares it for SnapATAC. We will create snap files that then will be 
+#Script that catenated preprocess 10x scATAC data and prepares it for SnapATAC. We will create snap files that then will be read into R. Note. That before creating the snap files, all samples were downsampled to the same number of average reads per cell.
 set -ueo #Exit immediately if a simple command exits with a non-zero status
 
 #Set paths and dependencies
@@ -42,6 +42,9 @@ for i in ${samples}; do
 	#Test to align data without creating a reference index. If this doesn't work I must create a bwa index with the tool.
 	echo "snaptools align-paired-end --input-reference=${ref_dir_bwa} --input-fastq1=${i}.dex.R1_val_1.fq.gz --input-fastq2=${i}.dex.R2_val_2.fq.gz --output-bam=${i}.snap.bam --aligner=bwa --path-to-aligner=/mnt/data/common/jonas/atacseq/for_scatac_pro/bwa-0.7.17  --read-fastq-command=zcat --min-cov=0 --num-threads=${threads} --if-sort=True --tmp-folder=./ --overwrite=TRUE"
 	snaptools align-paired-end --input-reference=${ref_dir_bwa} --input-fastq1=${i}.dex.R1_val_1.fq.gz --input-fastq2=${i}.dex.R2_val_2.fq.gz --output-bam=${i}.snap.bam --aligner=bwa --path-to-aligner=/mnt/data/common/jonas/atacseq/for_scatac_pro/bwa-0.7.17  --read-fastq-command=zcat --min-cov=0 --num-threads=${threads} --if-sort=True --tmp-folder=./ --overwrite=TRUE
+
+#Prior to creation of the snap-file the bam-file is downsampled to approximately 135k reads per cell with samtools view -bs 1.x in.bam > subsampled.bam where x=65 for ABM_CD41neg, 34 for ABM_CD41pos and 70 for ABM_MkPs.
+
 
 	#Create the snap-file
 	echo "snaptools snap-pre --input-file=${i}.snap.bam --output-snap=${i}.snap --genome-name=${ref_gen} --genome-size=${chrom_size_file} --min-mapq=30 --min-flen=0 --max-flen=1000 --keep-chrm=TRUE --keep-single=FALSE --keep-secondary=FALSE --overwrite=True --min-cov=100  --verbose=True"

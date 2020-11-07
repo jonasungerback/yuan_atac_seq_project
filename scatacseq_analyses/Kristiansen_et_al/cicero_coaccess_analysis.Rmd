@@ -1,0 +1,185 @@
+---
+title: "cicero_coaccess_analysis"
+output: html_document
+---
+
+  
+```{r all_cicero_conn, include=FALSE}
+#This code below converts a snapatac object into a monocle object in order to deriver putative promoter-enhancer interactions.
+
+############As one sample here
+library(cicero)
+library(GenomicRanges)
+peak.matrix <- t (as(object = x.sp3.monocle@pmat, Class = 'matrix') )
+colnames(peak.matrix) <- x.sp3.monocle@sample
+peaks.df <- as.data.frame(peak.gr)[,1:3]
+rownames(peak.matrix) <- paste(peaks.df[,1],peaks.df[,2],peaks.df[,3],sep = "_")
+
+library(reshape2)
+peaks.df <- as.data.frame( peak.matrix )
+#table(colnames(peaks.df))
+#CD41neg CD41pos  FL_HSC     MkP 
+#   2310    1123    2403    2986
+
+                                  
+colnames(peaks.df)[1:2403] <- paste(colnames(peaks.df)[1:2403], 1:2403, sep = "-")   
+colnames(peaks.df)[2404:4713] <- paste(colnames(peaks.df)[2404:4713], 1:2310, sep = "-")
+colnames(peaks.df)[4714:5836] <- paste(colnames(peaks.df)[4714:5836], 1:1123, sep = "-")
+colnames(peaks.df)[5837:8822] <- paste(colnames(peaks.df)[5837:8822], 1:2986, sep = "-")
+
+                                  
+peaks.df$peaks <- rownames(peak.matrix) 
+peaks.df <- melt(peaks.df, id.var = c("peaks"))
+
+#Save only bigger than 0 columns
+peaks.df <- subset(peaks.df, peaks.df$value > 0)
+
+library(cicero)
+input_cds <- make_atac_cds(peaks.df, binarize = TRUE)
+umap_coords <- x.sp3.monocle@umap
+rownames(umap_coords)<-colnames(input_cds)
+
+#Calculate tsne
+input_cds <- detectGenes(input_cds)
+input_cds <- estimateSizeFactors(input_cds)
+input_cds <- reduceDimension(input_cds, max_components = 2, num_dim=6,
+                      reduction_method = 'tSNE', norm_method = "none")
+tsne_coords <- t(reducedDimA(input_cds))
+row.names(tsne_coords) <- row.names(pData(input_cds))
+
+#cicero_cds <- make_cicero_cds(input_cds, reduced_coordinates = umap_coords)
+cicero_cds <- make_cicero_cds(input_cds, reduced_coordinates = tsne_coords)
+
+
+library(GenomicFeatures)
+mouse.mm10.genome <- getChromInfoFromUCSC("mm10")
+mouse.mm10.genome <- mouse.mm10.genome[1:22,]
+
+conns <- run_cicero(cicero_cds, mouse.mm10.genome)
+conns <- subset(conns, conns$coaccess > 0)
+
+#conns.back_up <- conns 
+
+conns <- conns.back_up
+
+CCAN_assigns <- generate_ccans(conns) # 0.32
+conns <- subset(conns, conns$coaccess >= 0.32)
+#Gene activity score calculation:
+#### Add a column for the pData table indicating the gene if a peak is a promoter ####
+# Create a gene annotation set that only marks the transcription start sites of 
+# the genes. We use this as a proxy for promoters.
+# To do this we need the first exon of each transcript
+pos <- subset(gene_anno, strand == "+")
+pos <- pos[order(pos$start),] 
+# remove all but the first exons per transcript
+pos <- pos[!duplicated(pos$transcript),] 
+# make a 1 base pair marker of the TSS
+pos$end <- pos$start + 1 
+
+neg <- subset(gene_anno, strand == "-")
+neg <- neg[order(neg$start, decreasing = TRUE),] 
+# remove all but the first exons per transcript
+neg <- neg[!duplicated(neg$transcript),] 
+neg$start <- neg$end - 1
+
+gene_annotation_sub <- rbind(pos, neg)
+gene_annotation_sub <- gene_annotation_sub[,c("chromosome", "start", "end", "symbol")]
+
+# Rename the gene symbol column to "gene"
+names(gene_annotation_sub)[4] <- "gene"
+
+input_cds <- annotate_cds_by_site(input_cds, gene_annotation_sub)
+#Bring out the annotated peaks.
+cicero_peaks <- as.data.frame(fData(input_cds))
+cicero_peaks <-cicero_peaks[complete.cases(cicero_peaks), ]
+save.image("cicero_coaccess_analysis.RData")
+######################
+
+conns_filt <- match_lists(conns, conns$Peak1, cicero_peaks$site_name, 1, name_match_column = "ap1")
+conns_filt <- match_lists(conns_filt, conns_filt$Peak2, cicero_peaks$site_name, 1, name_match_column = "ap2")
+conns_filt <- merge(conns_filt, cicero_peaks, by.x = "Peak1", by.y = "site_name", all.x = T)
+conns_filt <- conns_filt[,c(1:5,11)]
+conns_filt <- merge(conns_filt, cicero_peaks, by.x = "Peak2", by.y = "site_name", all.x = T)
+conns_filt <- conns_filt[,c(1:6,12)]
+colnames(conns_filt)[6] <- "TSS_1"
+colnames(conns_filt)[7] <- "TSS_2"
+
+conns_filt <- match_lists(conns_filt, conns_filt$TSS_1, fluidigm_genes$V1, 1, name_match_column = "fluidigm_gene_1")
+conns_filt <- match_lists(conns_filt, conns_filt$TSS_2, fluidigm_genes$V1, 1, name_match_column = "fluidigm_gene_2")
+conns_filt_fluidigm <- subset(conns_filt, conns_filt$fluidigm_gene_1==1|conns_filt$fluidigm_gene_2==1)
+
+peak1 <- cbind( as.data.frame(conns_filt_fluidigm[which(conns_filt_fluidigm$TSS_2 > 0),2]),as.data.frame(conns_filt_fluidigm[which(conns_filt_fluidigm$TSS_2 > 0),7]))
+colnames(peak1) <- c("coord", "gene")
+
+peak2 <- cbind( as.data.frame(conns_filt_fluidigm[which(conns_filt_fluidigm$TSS_1 > 0),1]),as.data.frame(conns_filt_fluidigm[which(conns_filt_fluidigm$TSS_1 > 0),6]))
+colnames(peak2) <- c("coord", "gene")
+
+int_conns_filt_fluidigm <- rbind(peak1,peak2)
+int_conns_filt_fluidigm$gene <- as.character(int_conns_filt_fluidigm$gene)
+library(stringr)
+s <- str_split_fixed(int_conns_filt_fluidigm$coord, "_",3)
+int_conns_filt_fluidigm <- cbind(as.data.frame(s[,1]),as.data.frame(s[,2]),as.data.frame(s[,3]), int_conns_filt_fluidigm$gene )
+
+library(GenomicRanges)
+int_conns_filt_fluidigm.gr = GRanges(as.character(int_conns_filt_fluidigm[,1]),  IRanges(as.numeric(as.character(int_conns_filt_fluidigm[,2])), as.numeric(as.character(int_conns_filt_fluidigm[,3]))), name=as.character(int_conns_filt_fluidigm[,4]))
+
+#Reduce the GRanges data set to non-overlapping:
+int_conns_filt_fluidigm.gr <- unlist(reduce(split(int_conns_filt_fluidigm.gr, int_conns_filt_fluidigm.gr$name)))
+
+library(FusionExpressionPlot)
+#Add back the name column.
+int_conns_filt_fluidigm.gr <- grAddColumn(int_conns_filt_fluidigm.gr, name = "name", vec = names(int_conns_filt_fluidigm.gr))
+
+fluidigm_gene_enhancer_score_combined_peaks <- regions_to_av_access(marker.genes = marker.genes, full_peak_set=peak.gr, peak_mat=x.sp3.monocle@pmat , grange_obj = int_conns_filt_fluidigm.gr)   
+
+fluidigm_gene_enhancer_score_df <- do.call(rbind, fluidigm_gene_enhancer_score_combined_peaks[[1]]) 
+
+
+View(fluidigm_gene_enhancer_score_df)
+
+#write.table(fluidigm_gene_enhancer_score_df, "fluidigm_gene_enhancer_score_df.combined_peaks_coaccess_0.32.txt", sep = "\t", quote = F)
+write.table(fluidigm_gene_enhancer_score_df, "fluidigm_gene_enhancer_score_df.combined_peaks_coaccess_0.32.txt", sep = "\t", quote = F)
+
+test <- unlist(fluidigm_gene_enhancer_score_combined_peaks[[2]])
+lapply(test, annoGR2DF)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r make_tracks_from_conns_filt, include=FALSE}
+
+#Only keep conns filt where there is a TSS
+conns_filt.TSS <- subset(conns_filt, conns_filt$TSS_1 > 0 | conns_filt$TSS_2 > 0)
+
+#Remove double scores that I am fairly sure are the same interactions.
+conns_filt.TSS <- conns_filt.TSS[!duplicated(conns_filt.TSS$coaccess), ]
+
+library(stringr)
+s <- str_split_fixed(conns_filt.TSS$Peak1, "_",3)
+int_conns_filt.TSS_1<- cbind(as.data.frame(s[,1]),as.data.frame(s[,2]),as.data.frame(s[,3]) )
+
+s <- str_split_fixed(conns_filt.TSS$Peak2, "_",3)
+int_conns_filt.TSS_2<- cbind(as.data.frame(s[,1]),as.data.frame(s[,2]),as.data.frame(s[,3]), conns_filt.TSS$coaccess )
+
+int_conns_filt.TSS <- cbind(int_conns_filt.TSS_1, int_conns_filt.TSS_2)
+
+write.table(int_conns_filt.TSS, "int_conns_filt.TSS.bed", row.names = F, col.names = F, quote = F, sep = "\t")
+
+#Only keep conns filt where there is a TSS
+
+library(stringr)
+s <- str_split_fixed(conns_filt_fluidigm$Peak1, "_",3)
+int_conns_filt_fluidigm.TSS_1<- cbind(as.data.frame(s[,1]),as.data.frame(s[,2]),as.data.frame(s[,3]) )
+
+s <- str_split_fixed(conns_filt_fluidigm$Peak2, "_",3)
+int_conns_filt_fluidigm.TSS_2<- cbind(as.data.frame(s[,1]),as.data.frame(s[,2]),as.data.frame(s[,3]), conns_filt_fluidigm$coaccess )
+
+int_conns_filt_fluidigm.TSS <- cbind(int_conns_filt_fluidigm.TSS_1, int_conns_filt_fluidigm.TSS_2)
+
+write.table(int_conns_filt_fluidigm.TSS, "int_conns_filt_fluidigm.TSS.bed", row.names = F, col.names = F, quote = F, sep = "\t")
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -18,133 +18,12 @@ When you click the **Knit** button a document will be generated that includes bo
 analyzeRepeats.pl rna mm10 -condenseGenes -count exons -raw -d FL1HSC_347TK/FL1HSC_347TK.mm10.rsem/FL1HSC_347TK_STAR_RSEM_mm10_tagdir/ FL2HSC_347TK/FL2HSC_347TK.mm10.rsem/FL2HSC_347TK_STAR_RSEM_mm10_tagdir/ 3_ABM_HSC/3_ABM_HSC.mm10.rsem/3_ABM_HSC_STAR_RSEM_mm10_tagdir/ ABM1HSC_347TK/ABM1HSC_347TK.mm10.rsem/ABM1HSC_347TK_STAR_RSEM_mm10_tagdir/ ABM2HSC_347TK/ABM2HSC_347TK.mm10.rsem/ABM2HSC_347TK_STAR_RSEM_mm10_tagdir/ 2_FL_LMPP/2_FL_LMPP.mm10.rsem/2_FL_LMPP_STAR_RSEM_mm10_tagdir/ FL1_lmpp_347TK/FL1_lmpp_347TK.mm10.rsem/FL1_lmpp_347TK_STAR_RSEM_mm10_tagdir/ FL2_lmpp_347TK/FL2_lmpp_347TK.mm10.rsem/FL2_lmpp_347TK_STAR_RSEM_mm10_tagdir/ 4_ABM_LMPP/4_ABM_LMPP.mm10.rsem/4_ABM_LMPP_STAR_RSEM_mm10_tagdir/ ABM1_lmpp_347TK/ABM1_lmpp_347TK.mm10.rsem/ABM1_lmpp_347TK_STAR_RSEM_mm10_tagdir/ ABM2_lmpp_347TK/ABM2_lmpp_347TK.mm10.rsem/ABM2_lmpp_347TK_STAR_RSEM_mm10_tagdir/ 5_Lin28b_HSC/5_Lin28b_HSC.mm10.rsem/5_Lin28b_HSC_STAR_RSEM_mm10_tagdir/ L28HSC_347TK/L28HSC_347TK.mm10.rsem/L28HSC_347TK_STAR_RSEM_mm10_tagdir/ 7_Ctrl_HSC/7_Ctrl_HSC.mm10.rsem/7_Ctrl_HSC_STAR_RSEM_mm10_tagdir/ ctrlHSC_347TK/ctrlHSC_347TK.mm10.rsem/ctrlHSC_347TK_STAR_RSEM_mm10_tagdir/ 6_Lin28b_LMPP/6_Lin28b_LMPP.mm10.rsem/6_Lin28b_LMPP_STAR_RSEM_mm10_tagdir/ L28_lmpp_347TK/L28_lmpp_347TK.mm10.rsem/L28_lmpp_347TK_STAR_RSEM_mm10_tagdir/ 8_Ctrl_LMPP/8_Ctrl_LMPP.mm10.rsem/8_Ctrl_LMPP_STAR_RSEM_mm10_tagdir/ ctrl_lmpp_347TK/ctrl_lmpp_347TK.mm10.rsem/ctrl_lmpp_347TK_STAR_RSEM_mm10_tagdir/ > 181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression.txt
 
 ```{r diff_analyis}
-colData <- data.frame(condition=c(rep("FL_HSC",2),rep("ABM_HSC",3),rep("FL_LMPP",3),rep("ABM_LMPP",3),rep("L28_HSC",2),rep("ctr_HSC",2),rep("L28_LMPP",2),rep("ctr_LMPP",2)), samples=c("FL1_HSC","FL2_HSC","ABM_HSC","ABM1_HSC","ABM2_HSC","FL_LMPP","FL1_lmpp","FL2_lmpp","ABM_LMPP","ABM1_lmpp","ABM2_lmpp","Lin28b_HSC","L28_HSC","Ctrl_HSC","CtrlHSC","Lin28b_LMPP","L28_lmpp","Ctrl_LMPP","ctrl_lmpp"))
 
-path_to_count_file <- "/Users/Jonas/Desktop/181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_counts.txt"
-# Count file must be n the format of "ID - chr - start - end - strand - length  - count_col1....count_col(n)"
-
-deseqAbs_object <- deseqAbs$new(name="HSC_LMPP", filename = path_to_count_file, colData = colData)
-deseqAbs_object$rawCounts <- ceiling(deseqAbs_object$rawCounts)
-deseqAbs_object$fullAuto()
-
-#Test for other categories
-conds <-gsub(pattern = "condition_",replacement = "",resultsNames(deseqAbs_object$deseq))
-# since CTR is the 2nd entry of the conds vector
-# make diffex analysis , and give it a name (without space is the best) that makes it easy to access later
-deseqAbs_object$makeDiffex(name = "testvstest2",c1 = c("FL_HSC"),c2=c("ABM_HSC"))
-test <-as.data.frame( deseqAbs_object$test$testvstest2 )
-#This gives only about 1000 genes compared to 2700 from the downloaded data. What if I just compare those two in a standard DESeq2-test.
-colData <- data.frame(condition=c(rep("FL_HSC",2),rep("ABM_HSC",3),rep("FL_LMPP",3),rep("ABM_LMPP",3),rep("L28_HSC",2),rep("ctr_HSC",2),rep("L28_LMPP",2),rep("ctr_LMPP",2)), samples=c("FL1_HSC","FL2_HSC","ABM_HSC","ABM1_HSC","ABM2_HSC","FL_LMPP","FL1_lmpp","FL2_lmpp","ABM_LMPP","ABM1_lmpp","ABM2_lmpp","Lin28b_HSC","L28_HSC","Ctrl_HSC","CtrlHSC","Lin28b_LMPP","L28_lmpp","Ctrl_LMPP","ctrl_lmpp"))
-counts <-read.delim("/Users/Jonas/Desktop/181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_counts_2.txt")
-sampleGroup<-matrix( factor(c(rep("FL_HSC",2),rep("ABM_HSC",3))), nrow=5, ncol=1)
-colData2 = data.frame(row.names = colnames(counts[,c(2:6)]), group = sampleGroup)
-counts[,2:6]<-ceiling(counts[,2:6])
-ddsseq<-DESeqDataSetFromMatrix(counts,colData = colData2, design = ~group, tidy = TRUE)
-dds <- DESeq(ddsseq)
-res1<-as.data.frame( results(dds, contrast=c('group','ABM_HSC', 'FL_HSC')))
-length(subset(res1,res1$padj<=0.05)[,1])
-#Gives about 1504 genes so considerably fewer.
-
-#Try PLBs pipeline on the ABM FL_HSC pair.
-colData2 <- data.frame(condition=c(rep("FL_HSC",2),rep("ABM_HSC",3)), samples=c("FL1_HSC","FL2_HSC","ABM_HSC","ABM1_HSC","ABM2_HSC"))
-path_to_count_file <- "/home/jonas/Documents/181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_counts_2.csv"
-deseqAbs_HSC <- deseqAbs$new(name="HSC", filename = path_to_count_file, colData = colData2)
-deseqAbs_HSC$rawCounts <- ceiling(deseqAbs_HSC$rawCounts)
-deseqAbs_HSC$fullAuto()
-test <-as.data.frame( deseqAbs_object$test$Default )
-length(subset(test,test$padj <=0.05)[,1])
-#2055 significant genes.
-#I will do the following. Create two test. One with the FL vs adult and another with L28 ABM comparison to partly avoid the multiple comparison problem.
-#ABM vs FL
-colData_FL_vs_HSC <- data.frame(condition=c(rep("FL_HSC",2),rep("ABM_HSC",3),rep("FL_LMPP",3),rep("ABM_LMPP",3)),samples=c("FL1_HSC","FL2_HSC","ABM_HSC","ABM1_HSC","ABM2_HSC","FL_LMPP","FL1_lmpp","FL2_lmpp","ABM_LMPP","ABM1_lmpp","ABM2_lmpp"))
-colData_FL_vs_HSC_v2 <- data.frame(condition=c(rep("FL_HSC",2),rep("ABM_HSC",2),rep("FL_LMPP",3),rep("ABM_LMPP",3)),samples=c("FL1_HSC","FL2_HSC","ABM1_HSC","ABM2_HSC","FL_LMPP","FL1_lmpp","FL2_lmpp","ABM_LMPP","ABM1_lmpp","ABM2_lmpp"))
-
-path_to_FL_vs_ABM_count_file <- "/home/jonas/Documents/181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_int_counts_FL_vs_ABM.txt"
-path_to_FL_vs_ABM_count_file_v2 <- "/Users/Jonas/Desktop/181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_counts_FL_vs_ABM_2.txt"
-deseqAbs_FLvsAdult <- deseqAbs$new(name="FLvsAdult", filename = path_to_FL_vs_ABM_count_file, colData = colData_FL_vs_HSC)
-deseqAbs_FLvsAdult$rawCounts <- ceiling(deseqAbs_FLvsAdult$rawCounts)
-deseqAbs_FLvsAdult$fullAuto()
-
-#Start to make pair-wise tables
-resultsNames(deseqAbs_FLvsAdult$deseq)
-deseqAbs_FLvsAdult$makeDiffex(name = "FLvsABM_HSC",c1 = c("FL_HSC"),c2=c("ABM_HSC"))
-deseqAbs_FLvsAdult$makeDiffex(name = "FLvsABM_LMPP",c1 = c("FL_LMPP"),c2=c("ABM_LMPP"))
-deseqAbs_FLvsAdult$makeDiffex(name = "FL_HSCvsLMPP",c1 = c("FL_HSC"),c2=c("FL_LMPP"))
-deseqAbs_FLvsAdult$makeDiffex(name = "ABM_HSCvsLMPP",c1 = c("ABM_HSC"),c2=c("ABM_LMPP"))
-
-FLvsABM_HSC_DESeq2 <-as.data.frame( deseqAbs_FLvsAdult$test$FLvsABM_HSC )
-colnames(FLvsABM_HSC_DESeq2)<-c("baseMean_FLvsABM_HSC","log2FC_FLvsABM_HSC","lfcSE_FLvsABM_HSC","stat_FLvsABM_HSC","pvalue_FLvsABM_HSC", "padj_FLvsABM_HSC")
-length(subset(FLvsABM_HSC_DESeq2,FLvsABM_HSC_DESeq2$padj_FLvsABM_HSC <= 0.05)[,1]) #1532 significant genes
-
-FLvsABM_LMPP_DESeq2 <-as.data.frame( deseqAbs_FLvsAdult$test$FLvsABM_LMPP )
-colnames(FLvsABM_LMPP_DESeq2)<-c("baseMean_FLvsABM_LMPP","log2FC_FLvsABM_LMPP","lfcSE_FLvsABM_LMPP","stat_FLvsABM_LMPP","pvalue_FLvsABM_LMPP", "padj_FLvsABM_LMPP")
-length(subset(FLvsABM_LMPP_DESeq2,FLvsABM_LMPP_DESeq2$padj_FLvsABM_LMPP <= 0.05)[,1]) #3367 significant genes
-
-FL_HSCvsLMPP_DESeq2 <-as.data.frame( deseqAbs_FLvsAdult$test$FL_HSCvsLMPP )
-colnames(FL_HSCvsLMPP_DESeq2)<-c("baseMean_FL_HSCvsLMPP","log2FC_FL_HSCvsLMPP","lfcSE_FL_HSCvsLMPP","stat_FL_HSCvsLMPP","pvalue_FL_HSCvsLMPP", "padj_FL_HSCvsLMPP")
-length(subset(FL_HSCvsLMPP_DESeq2,FL_HSCvsLMPP_DESeq2$padj_FL_HSCvsLMPP <= 0.05)[,1]) #3692
-
-ABM_HSCvsLMPP_DESeq2 <-as.data.frame( deseqAbs_FLvsAdult$test$ABM_HSCvsLMPP )
-colnames(ABM_HSCvsLMPP_DESeq2)<-c("baseMean_ABM_HSCvsLMPP","log2FC_ABM_HSCvsLMPP","lfcSE_ABM_HSCvsLMPP","stat_ABM_HSCvsLMPP","pvalue_ABM_HSCvsLMPP", "padj_ABM_HSCvsLMPP")
-length(subset(ABM_HSCvsLMPP_DESeq2,ABM_HSCvsLMPP_DESeq2$padj_ABM_HSCvsLMPP <= 0.05)[,1]) #3335
-
-#Create one big table for the FL vs ABM data.
-FL_vs_ABM_DESeq2_table <- cbind(FLvsABM_HSC_DESeq2,FLvsABM_LMPP_DESeq2,FL_HSCvsLMPP_DESeq2,ABM_HSCvsLMPP_DESeq2)
-FL_vs_ABM_DESeq2_table <- FL_vs_ABM_DESeq2_table[,c(2,5,6,8,11,12,14,17,18,20,23,24)]
-FL_vs_ABM_DESeq2_table$TranscriptID <-rownames(FL_vs_ABM_DESeq2_table)
-FL_vs_ABM_DESeq2_table <- FL_vs_ABM_DESeq2_table[,c(13,1:12)]
-
-#Add more features from the analyzeRNA file
-analyzeRNA <- read.delim("/mnt/data/common/yuan/rnaseq/181011_analyzeRNA_TK_HSC_LMPP_tpm_expression.txt",stringsAsFactors = F)
-colnames(analyzeRNA)[1]<-"TranscriptID"
-analyzeRNA <- analyzeRNA[,c(1,9,13:15)]
-FL_vs_ABM_DESeq2_table <-merge(FL_vs_ABM_DESeq2_table,analyzeRNA, by ="TranscriptID", all.x = T)
-FL_vs_ABM_DESeq2_table <- FL_vs_ABM_DESeq2_table[,c(1,14:17,2:16)]
-FL_vs_ABM_DESeq2_table <- FL_vs_ABM_DESeq2_table[,c(1:17)]
-
-
-#Same for L28 samples
-colData_L28 <- data.frame(condition=c(rep("L28_HSC",2),rep("ctr_HSC",2),rep("L28_LMPP",2),rep("ctr_LMPP",2)), samples=c("Lin28b_HSC","L28_HSC","Ctrl_HSC","CtrlHSC","Lin28b_LMPP","L28_lmpp","Ctrl_LMPP","ctrl_lmpp"))
-path_to_L28_count_file <- "/home/jonas/Documents/181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_counts_L28.csv"
-deseqAbs_L28 <- deseqAbs$new(name="L28", filename = path_to_L28_count_file, colData = colData_L28)
-deseqAbs_L28$rawCounts <- ceiling(deseqAbs_L28$rawCounts)
-deseqAbs_L28$fullAuto()
-
-#Start to make pair-wise tables
-deseqAbs_L28$makeDiffex(name = "L28HSCvsctrHSC",c1 = c("L28_HSC"),c2=c("ctr_HSC"))
-deseqAbs_L28$makeDiffex(name = "L28LMPPvsctrLMPP",c1 = c("L28_LMPP"),c2=c("ctr_LMPP"))
-deseqAbs_L28$makeDiffex(name = "L28_HSCvsLMPP",c1 = c("L28_HSC"),c2=c("L28_LMPP"))
-deseqAbs_L28$makeDiffex(name = "ctrl_HSCvsLMPP",c1 = c("ctr_HSC"),c2=c("ctr_LMPP"))
-
-L28HSCvsctrHSC_DESeq2 <-as.data.frame( deseqAbs_L28$test$L28HSCvsctrHSC )
-colnames(L28HSCvsctrHSC_DESeq2)<-c("baseMean_L28HSCvsctrHSC","log2FC_L28HSCvsctrHSC","lfcSE_L28HSCvsctrHSC","stat_L28HSCvsctrHSC","pvalue_L28HSCvsctrHSC", "padj_L28HSCvsctrHSC")
-length(subset(L28HSCvsctrHSC_DESeq2,L28HSCvsctrHSC_DESeq2$padj_L28HSCvsctrHSC <= 0.05)[,1]) #48 significant genes
-
-L28LMPPvsctrLMPP_DESeq2 <-as.data.frame( deseqAbs_L28$test$L28LMPPvsctrLMPP )
-colnames(L28LMPPvsctrLMPP_DESeq2)<-c("baseMean_L28LMPPvsctrLMPP","log2FC_L28LMPPvsctrLMPP","lfcSE_L28LMPPvsctrLMPP","stat_L28LMPPvsctrLMPP","pvalue_L28LMPPvsctrLMPP", "padj_L28LMPPvsctrLMPP")
-length(subset(L28LMPPvsctrLMPP_DESeq2,L28LMPPvsctrLMPP_DESeq2$padj_L28LMPPvsctrLMPP <= 0.05)[,1]) #2 significant genes
-
-L28_HSCvsLMPP_DESeq2 <-as.data.frame( deseqAbs_L28$test$L28_HSCvsLMPP )
-colnames(L28_HSCvsLMPP_DESeq2)<-c("baseMean_L28_HSCvsLMPP","log2FC_L28_HSCvsLMPP","lfcSE_L28_HSCvsLMPP","stat_L28_HSCvsLMPP","pvalue_L28_HSCvsLMPP", "padj_L28_HSCvsLMPP")
-length(subset(L28_HSCvsLMPP_DESeq2,L28_HSCvsLMPP_DESeq2$padj_L28_HSCvsLMPP <= 0.05)[,1]) #1646 significant genes
-
-ctrl_HSCvsLMPP_DESeq2 <-as.data.frame( deseqAbs_L28$test$ctrl_HSCvsLMPP )
-colnames(ctrl_HSCvsLMPP_DESeq2)<-c("baseMean_ctrl_HSCvsLMPP","log2FC_ctrl_HSCvsLMPP","lfcSE_ctrl_HSCvsLMPP","stat_ctrl_HSCvsLMPP","pvalue_ctrl_HSCvsLMPP", "padj_ctrl_HSCvsLMPP")
-length(subset(ctrl_HSCvsLMPP_DESeq2,ctrl_HSCvsLMPP_DESeq2$padj_ctrl_HSCvsLMPP <= 0.05)[,1]) #1029 significant genes
-
-#Create one big table for the L28 data.
-L28_DESeq2_table <- cbind(L28HSCvsctrHSC_DESeq2,L28LMPPvsctrLMPP_DESeq2,L28_HSCvsLMPP_DESeq2,ctrl_HSCvsLMPP_DESeq2)
-L28_DESeq2_table <- L28_DESeq2_table[,c(2,5,6,8,11,12,14,17,18,20,23,24)]
-L28_DESeq2_table$TranscriptID <-rownames(L28_DESeq2_table)
-L28_DESeq2_table <- L28_DESeq2_table[,c(13,1:12)]
-L28_DESeq2_table <-merge(L28_DESeq2_table,analyzeRNA, by ="TranscriptID", all.x = T)
-L28_DESeq2_table <- L28_DESeq2_table[,c(1,14:17,2:16)]
-L28_DESeq2_table <- L28_DESeq2_table[,c(1:17)]
 
 ##################################################################################################################
 ##################################################################################################################
 ##################################################################################################################
-# A problem with the method above, even though it has been very good for the pcas and sample to sample variation plots, is that the "lonely" sample adds variation that is killing the data. This has to be dealt with but instead of removing it I will run DESeq2 via homer using batch correction and then read the result files in here.
+# Run DESeq2 via Homer using batch correction and then read the result files in here. Raw counts have previously been derived with Homer analyzeRepeats.pl.
 
 getDiffExpression.pl 181011_analyzeRepeats_TK_HSC_LMPP_for_diff_expression_FL_vs_adult.txt FL_HSC FL_HSC BM_HSC BM_HSC BM_HSC FL_LMPP FL_LMPP FL_LMPP BM_LMPP BM_LMPP BM_LMPP -batch 2 2 1 2 2 1 2 2 1 2 2 -DESeq2 -AvsA > 181011_analyzeRepeats_TK_HSC_LMPP_DESeq2_diff_expression_FL_vs_adult.txt
 
@@ -193,16 +72,6 @@ L28_DESeq2_table <- read.delim("for_homer/181011_analyzeRepeats_TK_HSC_LMPP_DESe
 
 You can also embed plots, for example:
 
-```{r plotting, echo=FALSE}
-deseqAbs_object$sampleToSample()
-
-deseqAbs_object$pca()
-
-deseqAbs_FLvsAdult$sampleToSample()
-deseqAbs_FLvsAdult$pca()
-
-deseqAbs_L28$pca()
-```
 
 ```{r peak_files}
 source("/home/jonas/R_scripts/match_list_function.R")
