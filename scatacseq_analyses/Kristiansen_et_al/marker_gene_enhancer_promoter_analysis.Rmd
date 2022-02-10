@@ -1,0 +1,207 @@
+---
+title: "marker_gene_enhancer_promoter_analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+MkP_genes <- read.delim("/Users/Jonas/Documents/Arbetet/KAW-project_Lund/ATAC-seq/Trine_ATAC_project/rnaseq/Diff_peaks_vs_gene_expression/gsea_analyses/geneset_grp_files/nature12495/MkP.grp", stringsAsFactors = F, header = F)
+marker.genes = as.vector(MkP_genes[,1])
+#marker.genes = c("Lin28b", "Gata1", "Spi1","Nfe2", "Cebpa","Itga2b", "Vwf", "Gp9", "Itgb3" )
+
+fluidigm_genes <- read.delim("gene_list_fluidigm.txt", header = F)
+marker.genes = as.vector(fluidigm_genes[,1])
+
+#Can I use Granges to bring out the peaks from the pmat overlapping my specific feature. Test with the Lin28b promoter.
+mm10.tss = read.delim("mm10_tss.annotated.txt", stringsAsFactors = F);
+mm10.tss.gr = GRanges(mm10.tss[,2],  IRanges(mm10.tss[,3], mm10.tss[,4]), name=mm10.tss[,16]
+  );
+marker.genes = c("Ehd3", "Lin28b", "Ebf1", "Gata3" )
+
+
+marker.genes = as.vector(marker.genes)
+###########Write a function that take regions around marker genes and derive peaks in these regions from the pmat and calculate average access in these regions.
+
+fluidigm_gene_tss_score <- regions_to_av_access(marker.genes = marker.genes, full_peak_set=peak.gr, peak_mat=x.sp3.sample_peaks@pmat , grange_obj = mm10.tss.gr)
+# Merge the lists to a df
+fluidigm_gene_tss_score_df <- do.call(rbind, fluidigm_gene_tss_score[[1]])
+fluidigm_gene_tss_score_coord <- do.call(rbind, fluidigm_gene_tss_score[[2]])
+
+
+#Make a heatmap
+breakList <- seq(-1.5, 1.5, by = 0.1)
+
+test2 <- test2[complete.cases(test2), ]
+pheatmap(test2[,c(1:3)] [apply(test2[,c(1:3) ] , MARGIN = 1, FUN = function(x) sd(x) != 0),],  cluster_rows = T, cluster_cols = F, clustering_distance_rows = "correlation", clustering_distance_cols = "correlation", clustering_method = "ward.D2", show_rownames = T,  color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdYlBu")))(length(breakList)), breaks = breakList, scale = "row", border_color = "black")
+
+regions_to_av_access <- function(marker.genes=marker.genes, full_peak_set=peak.gr, peak_mat=x.sp3.sample_peaks@pmat, grange_obj = mm10.tss.gr) {
+
+#Bring out the coordinates for the marker genes
+#Create an empty list of length
+  score_list <- vector(mode = "list", length = length(marker.genes))
+  names(score_list) <- marker.genes
+  #Create a list to put the peak coordinates in.
+  coord_list <- vector(mode = "list", length = length(marker.genes))
+  names(coord_list) <- marker.genes
+  
+#Write a loop over the different genes.
+  counter = 1
+  for (i in marker.genes) {
+    print(paste("Currently investigating marker gene",i,sep = " "))
+    grange_obj.sel <- grange_obj[which(grange_obj$name %in% i)]
+    #Can I now identify this in the pmat? Identify the overlap in peak.gr
+    ovlp <- findOverlaps(subject = full_peak_set, query = grange_obj.sel)
+    #I add unique here so re-occuring overlaps are not reported several times.
+    ovlp <- unique(as.vector(as.data.frame(ovlp)[,2]))
+
+    #Now I want to subset this from the pmat.
+    df <- matrix(peak_mat[,ovlp])
+    #Calculate the sum of al the peaks in the regions.
+    df_sum <- apply(df,1,sum)
+    
+    #Binarize the df.
+    df_sum[which(df_sum > 1)] <- 1
+
+    #Calculate ratios of access vs non-access for each cell-type-
+    FL_ratio <- table(df_sum[1:2403])[2]/(table(df_sum[1:2403])[1] + table(df_sum[1:2403])[2])
+    CD41neg_ratio <- table(df_sum[2404:4713] )[2]/(table(df_sum[2404:4713] )[1] + table(df_sum[2404:4713] )[2])
+    CD41pos_ratio <-table(df_sum[4714:5836] )[2]/(table(df_sum[4714:5836] )[1] + table(df_sum[4714:5836] )[2])
+    MkP_ratio <- table(df_sum[5837:8822] )[2]/(table(df_sum[5837:8822] )[1] + table(df_sum[5837:8822] )[2])
+  
+    #Combine ratioms 
+    ratios <- c(FL_ratio, CD41neg_ratio, CD41pos_ratio, MkP_ratio)
+    names(ratios)  <- c("FL_ratio", "CD41neg_ratio", "CD41pos_ratio", "MkP_ratio")
+    score_list[[counter]] <- ratios
+    #Put in the coord in a list.
+    coord_list[[counter]] <- full_peak_set[ovlp]
+    
+    counter = counter + 1
+  }
+  return(list(score_list=score_list, coord_list=coord_list))
+
+  }
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r kai_tan_enhancer_applications}
+#read in interaction files.
+kai_tan_int <- read.delim("kai_tan_enhancer_promoter_interactions_FLvsadult.txt")
+
+#replace # with chromosome number
+kai_tan_int$int_chr <- paste("chr",kai_tan_int[,7],sep = "")
+
+#Test with Lin28b
+
+#Bring out FL specific enhancers
+kai_tan_FL_sp<- subset(kai_tan_int,  kai_tan_int$class == "FL_sp")
+kai_tan_FL_sp.gr = GRanges(kai_tan_FL_sp[,28],  IRanges(kai_tan_FL_sp[,8], kai_tan_FL_sp[,9]), name=kai_tan_FL_sp[,6])
+
+# The genes: kai_tan_int.gr = GRanges(kai_tan_enh[,28],  IRanges(kai_tan_enh[,3], kai_tan_enh[,4]), name=kai_tan_enh[,6])
+
+#Turns out that kai_tan data is in mm9 so have to convert.
+library(rtracklayer)
+#Bring in the chain file.
+download.file("http://hgdownload.cse.ucsc.edu/goldenpath/mm9/liftOver/mm9ToMm10.over.chain.gz", "mm9ToMm10.over.chain.gz")
+system("gzip -d mm9ToMm10.over.chain.gz")
+ch <- import.chain("mm9ToMm10.over.chain")
+seqlevelsStyle(kai_tan_FL_sp.gr) = "UCSC"
+#Lift it over to mm10.
+kai_tan_FL_sp.mm10.gr <- liftOver(kai_tan_FL_sp.gr,ch)
+kai_tan_FL_sp.mm10.gr <- unlist(kai_tan_FL_sp.mm10.gr)
+genome(kai_tan_FL_sp.mm10.gr) <- "mm10"
+
+#test fluidigm genes against FL spscific interactions
+fluidigm_genes <- read.delim("gene_list_fluidigm_kai_syntax.txt", header = F)
+marker.genes = as.vector(fluidigm_genes[,1])
+
+fluidigm_gene_FL_sp_enh_score <- regions_to_av_access(marker.genes = marker.genes, full_peak_set=peak.gr, peak_mat=x.sp3.sample_peaks@pmat , grange_obj = kai_tan_FL_sp.mm10.gr)
+
+fluidigm_gene_FL_sp_enh_score_df <- do.call(rbind, fluidigm_gene_FL_sp_enh_score[[1]])
+
+#Bring out BM specific enhancers
+kai_tan_BM_sp<- subset(kai_tan_int,  kai_tan_int$class == "BM_sp")
+kai_tan_BM_sp.gr = GRanges(kai_tan_BM_sp[,28],  IRanges(kai_tan_BM_sp[,8], kai_tan_BM_sp[,9]), name=kai_tan_BM_sp[,6])
+
+# The genes: kai_tan_int.gr = GRanges(kai_tan_enh[,28],  IRanges(kai_tan_enh[,3], kai_tan_enh[,4]), name=kai_tan_enh[,6])
+
+#Turns out that kai_tan data is in mm9 so have to convert.
+library(rtracklayer)
+#Bring in the chain file.
+download.file("http://hgdownload.cse.ucsc.edu/goldenpath/mm9/liftOver/mm9ToMm10.over.chain.gz", "mm9ToMm10.over.chain.gz")
+system("gzip -d mm9ToMm10.over.chain.gz")
+ch <- import.chain("mm9ToMm10.over.chain")
+seqlevelsStyle(kai_tan_BM_sp.gr) = "UCSC"
+#Lift it over to mm10.
+kai_tan_BM_sp.mm10.gr <- liftOver(kai_tan_BM_sp.gr,ch)
+kai_tan_BM_sp.mm10.gr <- unlist(kai_tan_BM_sp.mm10.gr)
+genome(kai_tan_BM_sp.mm10.gr) <- "mm10"
+
+#test BMuidigm genes against BM spscific interactions
+fluidigm_genes <- read.delim("gene_list_BMuidigm_kai_syntax.txt", header = F)
+marker.genes = as.vector(BMuidigm_genes[,1])
+
+fluidigm_gene_BM_sp_enh_score <- regions_to_av_access(marker.genes = marker.genes, full_peak_set=peak.gr, peak_mat=x.sp3.sample_peaks@pmat , grange_obj = kai_tan_BM_sp.mm10.gr)
+
+
+fluidigm_gene_BM_sp_enh_score_df <- do.call(rbind, fluidigm_gene_BM_sp_enh_score[[1]])
+
+#Bring out shared enhancers
+kai_tan_shared<- subset(kai_tan_int,  kai_tan_int$class == "shared")
+kai_tan_shared.gr = GRanges(kai_tan_shared[,28],  IRanges(kai_tan_shared[,8], kai_tan_shared[,9]), name=kai_tan_shared[,6])
+
+# The genes: kai_tan_int.gr = GRanges(kai_tan_enh[,28],  IRanges(kai_tan_enh[,3], kai_tan_enh[,4]), name=kai_tan_enh[,6])
+
+#Turns out that kai_tan data is in mm9 so have to convert.
+library(rtracklayer)
+#Bring in the chain file.
+download.file("http://hgdownload.cse.ucsc.edu/goldenpath/mm9/liftOver/mm9ToMm10.over.chain.gz", "mm9ToMm10.over.chain.gz")
+system("gzip -d mm9ToMm10.over.chain.gz")
+ch <- import.chain("mm9ToMm10.over.chain")
+seqlevelsStyle(kai_tan_shared.gr) = "UCSC"
+#Lift it over to mm10.
+kai_tan_shared.mm10.gr <- liftOver(kai_tan_shared.gr,ch)
+kai_tan_shared.mm10.gr <- unlist(kai_tan_shared.mm10.gr)
+genome(kai_tan_shared.mm10.gr) <- "mm10"
+
+#test BMuidigm genes against BM spscific interactions
+fluidigm_genes <- read.delim("gene_list_BMuidigm_kai_syntax.txt", header = F)
+marker.genes = as.vector(BMuidigm_genes[,1])
+
+fluidigm_gene_shared_enh_score <- regions_to_av_access(marker.genes = marker.genes, full_peak_set=peak.gr, peak_mat=x.sp3.sample_peaks@pmat , grange_obj = kai_tan_shared.mm10.gr)
+
+
+fluidigm_gene_shared_enh_score_df <- do.call(rbind, fluidigm_gene_shared_enh_score[[1]])
+
+
+#Make a heatmap
+breakList <- seq(-1.5, 1.5, by = 0.1)
+
+test2 <- test2[complete.cases(test2), ]
+pheatmap(test2[,c(1:4)] [apply(test2[,c(1:4) ] , MARGIN = 1, FUN = function(x) sd(x) != 0),],  cluster_rows = T, cluster_cols = F, clustering_distance_rows = "correlation", clustering_distance_cols = "correlation", clustering_method = "ward.D2", show_rownames = T,  color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdYlBu")))(length(breakList)), breaks = breakList, scale = "row", border_color = "black")
+
+
+#To look at positions
+#TSS file
+fluidigm_gene_tss_score[[2]]
+#FL enhancers
+fluidigm_gene_FL_sp_enh_score[[2]]
+#BM enhancers
+fluidigm_gene_BM_sp_enh_score[[2]]
+#Shared
+fluidigm_gene_shared_enh_score[[2]]
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
